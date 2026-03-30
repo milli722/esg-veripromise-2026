@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local competition data and experiment artifacts
+vpesg4k_train_1000 V1.csv
+vpesg4k_train_1000 V1.json
+outputs/
+checkpoints/
+logs/
+*.parquet
+*.pkl
+*.ckpt
