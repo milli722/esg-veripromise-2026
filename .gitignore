@@ -37,16 +37,19 @@ htmlcov/
 # Heavy artifacts (NOT pushed to GitHub)
 #   outputs/checkpoints  ~ 188 GB (6 stems x 3 seeds x 5 folds best.pt)
 #   outputs/cache        ~  2 MB cached per-view OOF tensors
+#
+# NOTE: patterns are anchored to repo root with leading '/' so that
+#       src/data/ (Python package) is NOT swept by `data/`.
 # =============================================================================
-outputs/
-checkpoints/
+/outputs/
+/checkpoints/
 *.pt
 *.bin
 *.safetensors
 *.ckpt
 
 # Cached intermediate matrices
-.cache/
+/.cache/
 *.npz
 *.parquet
 *.pkl
@@ -54,7 +57,7 @@ checkpoints/
 # =============================================================================
 # Runtime logs (regenerable)
 # =============================================================================
-logs/
+/logs/
 *.log
 *.jsonl
 
@@ -63,29 +66,31 @@ logs/
 #   The official 1,000-sample dataset (vpesg4k_train_1000 V1.csv / .json) at
 #   repo root IS tracked because the competition organiser releases it publicly.
 #
-#   Everything else inside data/ is local-only:
+#   Everything else inside /data/ is local-only:
 #     - data/raw/         (1.3 GB sustainability-report PDFs from public sources)
 #     - data/processed/   (pseudo-label CSVs, U10 corpus, U6-pro back-translation)
 #     - data/splits/      (per-stem K-Fold index files; regenerable from seeds)
+#
+#   Leading '/' anchors to repo root so src/data/ (Python package) is NOT ignored.
 # =============================================================================
-data/
+/data/
 
 # =============================================================================
 # Reports — keep only EDA images + final analysis markdown.
 # Everything else is per-run experiment dumps that bloat the repo.
 # =============================================================================
-reports/logs/
-reports/runs/
-reports/experiments/
-reports/analysis/
-reports/u6/
-reports/eda/*.html
+/reports/logs/
+/reports/runs/
+/reports/experiments/
+/reports/analysis/
+/reports/u6/
+/reports/eda/*.html
 
 # =============================================================================
 # Submissions / scratch
 # =============================================================================
-outputs/submissions/
-scratch/
+/outputs/submissions/
+/scratch/
 *.bak
 *.bak.md
 TODO.local.md

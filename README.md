@@ -174,8 +174,28 @@ jupyter notebook SOTA_Reproduction_Phase36.ipynb
 | `demo` | 對單一 stem 跑 1 fold smoke-train | 3 ~ 5 分鐘 |
 | `full` | 從零訓練 6 stems × 3 seeds × 5 folds | 30 ~ 40 GPU 小時 |
 
-> **注意**：`load_oof` 與 `demo`/`full` 都需要在本機自行訓練／下載 `outputs/checkpoints/`。
-> 公開 GitHub 倉儲僅含程式碼與設定檔，不含模型權重。
+> **注意**：`demo` / `full` 需要 GPU 自行訓練 `outputs/checkpoints/best.pt`。
+> 公開 GitHub 倉儲僅含程式碼與設定檔，不含模型權重（總計約 38 GB）。
+
+#### `load_oof` 模式快速重現（無 GPU 也可）
+
+`load_oof` 模式利用 §13 的 TTA cache 命中機制，**不需要 best.pt**，只需以下三類輕量檔案：
+
+| 路徑 | 檔案數 | 大小 |
+| :-- | :-: | :-: |
+| `outputs/checkpoints/{stem}/seed{S}/fold{F}/oof_probs.npz` | 105 | ~0.76 MB |
+| `outputs/cache/u10_tta/{stem}_{middle,tail}.npz` | 12 | ~1.2 MB |
+| `data/splits/{stem}/...` | 12 | ~0.3 MB |
+
+完整輕量 bundle 已預先打好（`load_oof_bundle_phase36.zip`，約 1.4 MB），請洽作者
+或於 [GitHub Releases](https://github.com/ericchen2023/esg-veripromise-2026/releases) 取得。
+解壓步驟：
+
+```powershell
+# 在 repo 根目錄
+Expand-Archive load_oof_bundle_phase36.zip -DestinationPath . -Force
+# 之後設 MODE="load_oof" 執行 SOTA notebook 即可重現 0.71018
+```
 
 ---
 
