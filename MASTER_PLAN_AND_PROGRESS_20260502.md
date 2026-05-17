@@ -3287,3 +3287,155 @@ T4 的 label domain 是 4 類（Clear / Not Clear / Misleading / N/A）。macro-
 ---
 
 *文件結尾。最後修訂：2026-05-12 by 個人單兵組。*
+
+
+---
+
+# 第 56 章 ｜ Phase 37：合法資料擴增（LLM 合成 + 人工標註 + LLM 評審）
+
+> **官方裁示（2026-05-15 群組訊息）**：
+> 「加入自己查詢和標註的資料」算是「資料擴增」的範疇 … 純手工自製資料 … 用大語言模型生成資料 … 僅「主辦方提供之測試資料集」和「最後參賽者上傳的預測結果」絕對不能有人工介入。
+
+## 56.1 為何 Phase 36 (OOF=0.71018) 卡在這
+
+回顧官方訓練集 1000 筆的 4 任務標籤分佈：
+
+| 任務 | 多數類 | 少數類 | 樣本數 |
+|---|---|---|---|
+| T1 promise_status (權重 0.20) | Yes=814 | No=186 | 已可學 |
+| T2 verification_timeline (權重 0.15) | already=366 / between=238 / longer=197 | **within_2_years=13** | 嚴重不足 |
+| T3 evidence_status (權重 0.30) | Yes=677 | No=137 | 可學 |
+| T4 evidence_quality (權重 0.35) | Clear=552 | Not Clear=124 / **Misleading=1** | 災難級不足 |
+
+Phase 36 各 task 分數：T1=0.872, T2=0.687, T3=0.866, T4=**0.469**。**T4 macro-F1 = 0.469 × 權重 0.35 = 整體最大進步槓桿**，且根本原因是 Misleading 類別僅 1 筆，模型無法學到任何判別特徵。
+
+## 56.2 Phase 37 三路並進策略
+
+1. **LLM 合成資料**（scripts/u13_synth_llm.py） — 多供應商抽象（OpenAI / Anthropic / Gemini / Ollama / Mock），用 prompt engineering 直接生成 ~300 筆少數類樣本。
+2. **人工標註模板**（scripts/u13_manual_seed.py） — 預填 20 筆作者手寫種子 + 311 筆 <TODO_FILL_NNN> 空白模板，含目標標籤分佈，作者只需填入 data 欄位。
+3. **LLM 評審**（scripts/u13_llm_judge.py） — 對既有 U10 偽標籤 (3110 筆) 用 LLM zero-shot 重新判斷，輸出 llm_judge_score，下游可篩選高一致性子集。
+
+## 56.3 目標分佈（PHASE37_TARGET_COUNTS）
+
+src/data/synth_schema.py:PHASE37_TARGET_COUNTS 共 330 筆：
+
+| (T2, T4) | n | 理由 |
+|---|---|---|
+| within_2_years × Clear | 60 | 補 T2 最少數類 |
+| within_2_years × Not Clear | 40 | 補 T2 × T4 雙重少數 |
+| within_2_years × Misleading | 30 | T2 + T4 雙瓶頸交集 |
+| longer_than_5_years × Misleading | 40 | 補 T4 Misleading |
+| longer_than_5_years × Not Clear | 30 | 補 T4 Not Clear |
+| between_2_and_5_years × Misleading | 30 | 補 T4 Misleading |
+| already × Misleading | 30 | 補 T4 Misleading |
+| already × Not Clear | 40 | 平衡 T4 |
+| T1=No (全 N/A) | 30 | 維持 No 類錨點 |
+
+合計 Misleading=130 筆（從 1 → 131，提升 130 倍），within_2_years=130 筆（從 13 → 143，提升 11 倍）。
+
+## 56.4 完整管線（指令清單）
+
+```powershell
+# A. 用 Mock provider 跑 dry-run（不需 API key）
+python scripts/u13_synth_llm.py generate --provider mock --output data/processed/u13/synth_raw.jsonl
+
+# B. 切換真實 LLM（需設定環境變數）
+$env:OPENAI_API_KEY = "sk-..."
+python scripts/u13_synth_llm.py generate --provider openai --output data/processed/u13/synth_raw_openai.jsonl --sleep 0.5
+
+# C. 驗證 / 去重 / 階層檢查
+python scripts/u13_synth_llm.py validate \
+    --input data/processed/u13/synth_raw_openai.jsonl \
+    --output data/processed/u13/synth_filtered.jsonl \
+    --min-len 80 --max-len 600
+
+# D. 推升為偽標籤 CSV（confidence=0.95）
+python scripts/u13_synth_llm.py promote \
+    --input data/processed/u13/synth_filtered.jsonl \
+    --output data/processed/u13/synth_pseudo.csv \
+    --confidence 0.95
+
+# E. 合併 U10 v3 + U13 synth
+python scripts/u13_synth_llm.py merge \
+    --inputs data/processed/u10/pseudo_labels_v3.csv data/processed/u13/synth_pseudo.csv \
+    --output data/processed/u13/u10_v3_plus_synth.csv
+
+# F. 訓練 Phase 37 模型
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_classw_focal_u13_synth.yaml
+
+# G. (選擇性) LLM 評審重新打分 U10
+python scripts/u13_llm_judge.py judge \
+    --input data/processed/u10/pseudo_labels_v3.csv \
+    --output data/processed/u10/pseudo_labels_v3_judged.csv \
+    --provider openai --sleep 0.5
+
+# H. (選擇性) 人工標註模板
+python scripts/u13_manual_seed.py emit --output data/processed/u13/manual_template.csv
+# → 用 Excel/CSV editor 填 311 個 <TODO_FILL_NNN> 後，merge 進管線
+```
+
+## 56.5 ID 命名空間（防止 collision）
+
+| ID 範圍 | 用途 |
+|---|---|
+| 0 ~ 999 | 官方訓練集 |
+| 100000 ~ 199999 | U10 偽標籤 |
+| 200000 ~ 299999 | (保留 U11 / U12) |
+| **300000 ~ 9299999** | **U13 LLM 合成（hash-based stable ID）** |
+| 400000 ~ 499999 | U13 人工標註模板（順序遞增） |
+
+## 56.6 設定檔（exp_p2_combo_best_classw_focal_u13_synth.yaml）
+
+繼承 Phase 36 最佳配方 (u6pro)，僅換 data.pseudo_csv_path 為 merged CSV，並調整：
+- pseudo.min_confidence: 0.90（接受 0.95 合成 + 0.95 U10 gold）
+- pseudo.max_pseudo: 4400（3904 U10 + ~300 U13 + headroom）
+
+## 56.7 預期效益試算（保守）
+
+假設 T4 macro-F1 從 0.469 提升到 **0.58**（Misleading F1 從 0.0 → 0.4，其他類別維持）：
+
+ΔScore = 0.35 × (0.58 - 0.469) = +0.039
+
+整體分數 0.71018 → **0.749 ~ 0.755**（不含 T2 增益、不含 LLM judge 篩選增益）。
+
+若 T2 macro-F1 同步從 0.687 提升到 0.74（within_2_years F1 從 ~0.2 → 0.5）：
+
+ΔScore += 0.15 × (0.74 - 0.687) = +0.008
+
+**綜合預估 Phase 37 OOF 目標：0.755 ~ 0.770**
+
+## 56.8 風險與緩解
+
+| 風險 | 緩解 |
+|---|---|
+| LLM 合成樣本「太規律」、模型過擬合表面 pattern | 多 provider 混用 + 高溫 0.85 + 主題種子輪替 30+ 個 |
+| 合成樣本與測試集分佈不符 | confidence=0.95 < 1.0；Stage B fine-tune 仍只用真實資料 |
+| LLM 偶發 hierarchy 違反 | ssert_labels_valid 於 promote 階段攔截，違者直接丟棄 |
+| 重複生成 | stable_synth_id (blake2b hash) 保證 idempotent + SimHash-lite dedup |
+| 官方規則解讀錯誤 | 已截圖保存群組訊息；ID 命名空間明確隔離；可逆（合成資料皆在 data/processed/u13/） |
+
+## 56.9 測試覆蓋
+
+	ests/test_u13_synth.py 12 個測試全綠：
+- schema 對齊 U10
+- hierarchy 4 種合法 + 3 種非法
+- stable_id 決定性
+- SynthRow 往返
+- target spec 全部 hierarchy-valid
+- minority class 數量達標 (Misleading≥100, within_2y≥100)
+- CLI end-to-end (generate → validate → promote) with Mock provider
+
+pytest tests/test_u13_synth.py -v → **12 passed in 6.61s**
+
+## 56.10 待辦（下一輪）
+
+1. 取得 OpenAI / Anthropic API key 後跑真實生成 (~300 樣本，預估 \.10 ~ \.50 成本)
+2. 人工 review LLM 輸出抽樣 30 筆，計算標籤命中率 (target ≥ 85%)
+3. 跑 exp_p2_combo_best_classw_focal_u13_synth.yaml 完整 5-fold × 3-seed 訓練
+4. 比對 Phase 36 vs Phase 37 各 task F1，產出 MASTER_PLAN §57 Phase 37 結果報告
+5. 若 OOF ≥ 0.75，產生最終提交檔 + 更新 inal_summary/
+
+---
+
+*記錄人：自動代理｜2026-05-18*
+

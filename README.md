@@ -282,6 +282,13 @@ python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_classw_focal
 
 - **U10 弱監督管線**（M1~M5）：從公開資訊觀測站爬 30 家公司永續報告書 → PDF 段落擷取＋SimHash 去重 → 教師模型四任務聯合閘門（T1≥0.80 / T2≥0.60 / T3≥0.70 / T4≥0.60）→ 兩階段微調（Stage A：pseudo+real / Stage B：real-only）。
 - **U6-pro 反翻譯**：NLLB-200-distilled-600M × 雙樞紐（en、ja）× 雙溫度，搭配 109 條 ESG 術語表保護與 ChrF 過濾，對 minority 類別（T2 within_2y / longer_5y、T4 Misleading / Not Clear）產生 434 筆增強樣本，僅在 fold-train 端注入，**永不洩漏 val/OOF**。
+- **U13 LLM 合成 + 人工標註**（Phase 37，官方 2026-05-15 裁示明確授權）：
+  - `scripts/u13_synth_llm.py`：4 子命令（generate / validate / promote / merge），5 個 provider（OpenAI / Anthropic / Gemini / Ollama / Mock），鎖定 T2 within_2y (13→143)、T4 Misleading (1→131) 兩大瓶頸類。
+  - `scripts/u13_manual_seed.py`：emit 20 筆作者手寫種子 + 311 筆 `<TODO_FILL>` 模板（含目標標籤分佈）。
+  - `scripts/u13_llm_judge.py`：LLM-as-judge 對既有 U10 偽標籤重新打分（`llm_judge_score` ∈ [0,1]）。
+  - 設定檔：`configs/exp_p2_combo_best_classw_focal_u13_synth.yaml`（繼承 Phase 36 最佳配方 + U13 合成資料）。
+  - 測試：`tests/test_u13_synth.py` 12 個測試全綠。
+  - **詳見 [MASTER_PLAN §56](MASTER_PLAN_AND_PROGRESS_20260502.md#第-56-章-｜-phase-37合法資料擴增llm-合成--人工標註--llm-評審)**。
 
 ### 6.4 集成（Phase 36 核心）
 
