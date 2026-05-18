@@ -47,7 +47,13 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = ROOT / "vpesg4k_train_1000 V1.json"
-GLOSSARY_PATH = ROOT / "data" / "processed" / "u6_pro" / "esg_glossary.json"
+# Tracked-in-repo location (preferred); falls back to the legacy data/processed
+# path if a user already has it materialised there.
+GLOSSARY_PATH = ROOT / "assets" / "u6_pro" / "esg_glossary.json"
+if not GLOSSARY_PATH.exists():
+    _legacy = ROOT / "data" / "processed" / "u6_pro" / "esg_glossary.json"
+    if _legacy.exists():
+        GLOSSARY_PATH = _legacy
 OUT_PATH = ROOT / "data" / "processed" / "u6_pro" / "u6_backtrans_pro.json"
 SUM_PATH = ROOT / "reports" / "u6" / "backtrans_pro_summary.json"
 CACHE_PATH = ROOT / "data" / "processed" / "u6_pro" / "_tmem_cache.jsonl"

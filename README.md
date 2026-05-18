@@ -68,8 +68,9 @@ Phase 36（2026-05-10）— 5-Fold OOF：
 | Phase 34 | + U10 v1/v2 偽標籤兩階段微調 | 0.6878 |
 | Phase 35 | + 5-way 6 stems × 3-view TTA | 0.7034 |
 | **Phase 36** | + U6-pro 反翻譯擴增 & 6-way × 3-view × per-task hillclimb | **0.71018** |
+| Phase 37 | + Aug-Plus 47 列親撰種子（single-stem ablation, seed=42） | 0.66966（與 stem #6 baseline 0.67044 持平；保留為 7th-stem 候選） |
 
-完整實驗紀錄見 [`MASTER_PLAN_AND_PROGRESS_20260502.md`](MASTER_PLAN_AND_PROGRESS_20260502.md)。
+完整實驗紀錄見 [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md)。
 
 ---
 
@@ -78,7 +79,7 @@ Phase 36（2026-05-10）— 5-Fold OOF：
 ```
 esg-veripromise-2026/
 ├── SOTA_Reproduction_Phase36.ipynb    # ★ 主要交付：SOTA 重現手冊（17 章）
-├── MASTER_PLAN_AND_PROGRESS_20260502.md  # 完整研究日誌（Phase 1~36）
+├── MASTER_PLAN_AND_PROGRESS_20260518.md  # 完整研究日誌（Phase 1~37）
 ├── ESG_永續承諾驗證競賽_2026.md         # 競賽規則
 ├── README.md
 ├── requirements.txt
@@ -256,7 +257,7 @@ python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_classw_focal
 
 ## 6. 方法概要
 
-詳細推導與消融實驗見 [`MASTER_PLAN_AND_PROGRESS_20260502.md`](MASTER_PLAN_AND_PROGRESS_20260502.md) §10、§47–§54。
+詳細推導與消融實驗見 [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md) §10、§47–§55。
 
 ### 6.1 模型
 
@@ -317,6 +318,32 @@ elif evidence_status == "No":
 
 該約束**必須在 hillclimb 評分迴圈內即套用**，否則 hillclimb 會選到不合法但 OOF F1 較高的權重。
 
+### 6.5 Aug-Plus 擴增模組（Phase 37 · 已完成訓練 single-stem ablation）
+
+2026-05-17 主辦單位裁示：「自行查詢與標註資料」屬合法資料擴增；**手工撰寫或 LLM 合成皆允許**，唯一禁區是測試集與最終預測。基此新增 **Aug-Plus（AP1~AP5）** 模組，鎖定 Phase 36 雙瓶頸：T4 `Misleading`（train 僅 1 筆）與 T2 `within_2_years`（train 僅 13 筆）。
+
+| 模組 | 檔案 | 角色 |
+| --- | --- | --- |
+| AP1 schema | [`src/data/aug_schema.py`](src/data/aug_schema.py) | 欄位、階層驗證、ID 空間切分 |
+| AP2 種子 | [`assets/aug_plus/build_handcrafted_v1.py`](assets/aug_plus/build_handcrafted_v1.py) → `handcrafted_v1.csv` | 50 列親撰繁中 ESG 段落（T4 Misleading × 20、T2 within_2y × 22） |
+| AP3 合成 | [`scripts/ap_llm_synth.py`](scripts/ap_llm_synth.py) | `generate/validate/merge/promote`；多 provider（Mock 預設、OpenAI/Anthropic/Gemini/Ollama 為 stub） |
+| AP3 prompt | [`configs/prompts/ap_*.yaml`](configs/prompts/) | 系統提示 + fewshot + user 模板 |
+| AP4 閘門 | [`scripts/ap_quality_gate.py`](scripts/ap_quality_gate.py) | 長度、schema 防禦、SimHash 去重、teacher 信心 hook |
+| AP5 訓練 | [`configs/exp_p2_combo_best_aug_plus.yaml`](configs/exp_p2_combo_best_aug_plus.yaml) | 疊在 Phase 36 best 之上、不改任何程式碼 |
+
+端到端煙霧（已通過 25/25 單元測試）：
+```powershell
+python assets/aug_plus/build_handcrafted_v1.py
+python scripts/ap_llm_synth.py generate --target misleading --n 30 --provider mock --seed 42
+python scripts/ap_llm_synth.py generate --target within_2_years --n 20 --provider mock --seed 7
+python scripts/ap_llm_synth.py merge --out data/aug_plus/aug_merged_raw.csv
+python scripts/ap_quality_gate.py --skip-teacher
+python scripts/ap_llm_synth.py promote --gated-csv data/aug_plus/aug_gated.csv --with-u10
+# → 訓練：python src/train_pseudo_kfold.py --config configs/exp_p2_combo_best_aug_plus.yaml
+```
+
+**狀態：Phase 37 G3 smoke + G4 5-fold 全訓練皆已完成**（seed=42 × 5 folds · 約 53 min 於 RTX 5060 Laptop）。Single-stem OOF = **0.66966**（vs Phase 36 stem #6 baseline 0.67044，**Δ = −0.00078**），落在 U12 OOF noise budget ±0.0045 內，未升單 stem SOTA；其中 **T4 +0.00483 與設計意圖一致**，T2 因 47 列種子以 within_2y 為主造成 −0.02105 regression。下一步：將此 stem 加入 7-way per-task hillclimb 驗證 + 重配 AP 種子比例。詳 [MASTER_PLAN §53](MASTER_PLAN_AND_PROGRESS_20260518.md#53-phase-37-aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18)。
+
 ---
 
 ## 7. 文件總覽
@@ -324,7 +351,7 @@ elif evidence_status == "No":
 | 文件 | 內容 |
 | :-- | :-- |
 | [`SOTA_Reproduction_Phase36.ipynb`](SOTA_Reproduction_Phase36.ipynb) | 17 章可執行重現手冊；首選入口 |
-| [`MASTER_PLAN_AND_PROGRESS_20260502.md`](MASTER_PLAN_AND_PROGRESS_20260502.md) | 從 Phase 1 到 Phase 36 的完整研究日誌（5 部 / 55 節 / 243 錨點） |
+| [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md) | 從 Phase 1 到 Phase 37 的完整研究日誌（含 Aug-Plus AP1~AP5 模組與訓練 ablation） |
 | [`ESG_永續承諾驗證競賽_2026.md`](ESG_永續承諾驗證競賽_2026.md) | 競賽官方規則 |
 | [`[External]_VeriPromiseESG_..._Baseline_Code_ZH.ipynb`](%5BExternal%5D_VeriPromiseESG_2026_ESG_Promise_Verification_Competition_Baseline_Code_ZH.ipynb) | 主辦單位提供的 baseline notebook |
 | [`docs/archive/`](docs/archive/) | 早期計畫文件存檔 |
