@@ -1,8 +1,10 @@
-# VeriPromise ESG 2026 — Phase 36 SOTA Pipeline
+# VeriPromise ESG 2026 — Phase 37 AP-D3 SOTA Pipeline
 
 > 繁中 ESG 永續承諾驗證競賽（**ESG VeriPromise 2026 / AI CUP 2026**）參賽程式碼。
-> 採 6 stems × 3 seeds × 5-fold × 3-view TTA × per-task hillclimb 集成法，
-> 在官方 1,000 筆訓練集上以 5-Fold Stratified CV 取得 **OOF weighted score = 0.71018**。
+> 採 **7 stems × seed42 × 5-fold × 3-view TTA × per-task hillclimb** 集成法（AP-D3），
+> 在官方 1,000 筆訓練集上以 5-Fold Stratified CV 取得 **OOF weighted score = 0.71364**（NEW SOTA，2026-05-18）。
+>
+> **➜ 想直接複現 SOTA？請看 [REPRODUCE.md](REPRODUCE.md)，從 clone 到 0.71364 的一站式說明書。**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![PyTorch 2.2+](https://img.shields.io/badge/pytorch-2.2%2B-ee4c2c)](https://pytorch.org/)
@@ -49,15 +51,17 @@ S = 0.20 · F1(T1, Yes) + 0.15 · macroF1(T2)
 
 ## 2. SOTA 結果速覽
 
-Phase 36（2026-05-10）— 5-Fold OOF：
+Phase 37 **AP-D3**（2026-05-18）— 5-Fold OOF（seed42）：
 
-| 指標 | 分數 |
-| :-- | :-: |
-| **加權總分** | **0.71018** |
-| T1 promise_status (F1, Yes) | 0.94210 |
-| T2 verification_timeline (macro F1) | 0.62778 |
-| T3 evidence_status (F1, Yes) | 0.87774 |
-| T4 evidence_quality (macro F1) | 0.46934 |
+| 指標 | **AP-D3（current SOTA）** | Phase 36（舊 SOTA） |
+| :-- | :-: | :-: |
+| **加權總分** | **0.71364** | 0.71018 |
+| T1 promise_status (F1, Yes) | 0.94337 | 0.94210 |
+| T2 verification_timeline (macro F1) | 0.63061 | 0.62778 |
+| T3 evidence_status (F1, Yes) | 0.88045 | 0.87774 |
+| T4 evidence_quality (macro F1) | 0.47496 | 0.46934 |
+
+Δ apples-to-apples（同 seed42 × 同 3-view 設定）= **+0.00346**（4/4 任務皆改善）。重現指令見 [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071364)。
 
 ### Phase 32 → 36 進化軌跡
 
