@@ -1,10 +1,10 @@
-# VeriPromise ESG 2026 — Phase 37 AP-D3 SOTA Pipeline
+# VeriPromise ESG 2026 — Phase 38 AP-D4 SOTA Pipeline
 
 > 繁中 ESG 永續承諾驗證競賽（**ESG VeriPromise 2026 / AI CUP 2026**）參賽程式碼。
-> 採 **7 stems × seed42 × 5-fold × 3-view TTA × per-task hillclimb** 集成法（AP-D3），
-> 在官方 1,000 筆訓練集上以 5-Fold Stratified CV 取得 **OOF weighted score = 0.71364**（NEW SOTA，2026-05-18）。
+> 採 **8 stems × seed42 × 5-fold × 3-view TTA × per-task hillclimb** 集成法（AP-D4），加入 **Ollama qwen2.5:7b-instruct 本機 LLM 合成**補強少數類樣本，
+> 在官方 1,000 筆訓練集上以 5-Fold Stratified CV 取得 **OOF weighted score = 0.71608**（NEW SOTA，2026-05-20）。
 >
-> **➜ 想直接複現 SOTA？請看 [REPRODUCE.md](REPRODUCE.md)，從 clone 到 0.71364 的一站式說明書。**
+> **➜ 想直接複現 SOTA？請看 [REPRODUCE.md](REPRODUCE.md)，從 clone 到 0.71608 的一站式說明書。**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![PyTorch 2.2+](https://img.shields.io/badge/pytorch-2.2%2B-ee4c2c)](https://pytorch.org/)
@@ -51,17 +51,17 @@ S = 0.20 · F1(T1, Yes) + 0.15 · macroF1(T2)
 
 ## 2. SOTA 結果速覽
 
-Phase 37 **AP-D3**（2026-05-18）— 5-Fold OOF（seed42）：
+Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 
-| 指標 | **AP-D3（current SOTA）** | Phase 36（舊 SOTA） |
-| :-- | :-: | :-: |
-| **加權總分** | **0.71364** | 0.71018 |
-| T1 promise_status (F1, Yes) | 0.94337 | 0.94210 |
-| T2 verification_timeline (macro F1) | 0.63061 | 0.62778 |
-| T3 evidence_status (F1, Yes) | 0.88045 | 0.87774 |
-| T4 evidence_quality (macro F1) | 0.47496 | 0.46934 |
+| 指標 | **AP-D4（current SOTA）** | AP-D3（舊 SOTA） | Phase 36 |
+| :-- | :-: | :-: | :-: |
+| **加權總分** | **0.71608** | 0.71364 | 0.71018 |
+| T1 promise_status (F1, Yes) | **0.94387** | 0.94337 | 0.94210 |
+| T2 verification_timeline (macro F1) | **0.63150** | 0.63061 | 0.62778 |
+| T3 evidence_status (F1, Yes) | 0.88011 | **0.88045** | 0.87774 |
+| T4 evidence_quality (macro F1) | **0.48157** | 0.47496 | 0.46934 |
 
-Δ apples-to-apples（同 seed42 × 同 3-view 設定）= **+0.00346**（4/4 任務皆改善）。重現指令見 [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071364)。
+Δ apples-to-apples（vs AP-D3 同 seed42 × 同 3-view 設定）= **+0.00244**（T1+0.00050、T2+0.00089、T3−0.00034、**T4+0.00661**）；AP-D4 加入的 stem #8 以 **Ollama qwen2.5:7b-instruct** 生成 80 列 Misleading + 60 列 within_2_years 作為訓練語料補充，針對 T4 / T2 連類頻低類別。重現指令見 [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071608)。
 
 ### Phase 32 → 36 進化軌跡
 
@@ -72,7 +72,8 @@ Phase 37 **AP-D3**（2026-05-18）— 5-Fold OOF（seed42）：
 | Phase 34 | + U10 v1/v2 偽標籤兩階段微調 | 0.6878 |
 | Phase 35 | + 5-way 6 stems × 3-view TTA | 0.7034 |
 | **Phase 36** | + U6-pro 反翻譯擴增 & 6-way × 3-view × per-task hillclimb | **0.71018** |
-| Phase 37 | + Aug-Plus 47 列親撰種子（single-stem ablation, seed=42） | 0.66966（與 stem #6 baseline 0.67044 持平；保留為 7th-stem 候選） |
+| Phase 37 | + Aug-Plus 47 列親撞種子（single-stem ablation, seed=42）→ 7-way × 3-view（AP-D3） | 0.71364 |
+| **Phase 38** | + Ollama qwen2.5:7b-instruct 本機 LLM 合成 （stem #8）→ **8-way × 3-view（AP-D4）** | **0.71608** |
 
 完整實驗紀錄見 [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md)。
 

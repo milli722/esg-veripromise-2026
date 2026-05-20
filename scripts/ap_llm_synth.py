@@ -167,8 +167,137 @@ def _gemini_provider(spec: dict, n: int, seed: int) -> list[dict]:  # pragma: no
     raise NotImplementedError("Gemini stub.")
 
 
-def _ollama_provider(spec: dict, n: int, seed: int) -> list[dict]:  # pragma: no cover
-    raise NotImplementedError("Ollama stub.")
+def _ollama_provider(spec: dict, n: int, seed: int) -> list[dict]:
+    """Local-LLM provider using an Ollama daemon at ``OLLAMA_HOST``.
+
+    Environment
+    -----------
+    OLLAMA_HOST  default ``http://localhost:11434``
+    OLLAMA_MODEL default ``qwen2.5:7b-instruct``
+
+    Requires only the Python stdlib (``urllib``) so the scaffold has no
+    network deps unless this provider is actually selected.
+    """
+    import urllib.error
+    import urllib.request
+
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
+
+    target_label = spec["target"]["label"]
+    system_prompt = spec.get("system_prompt", "").strip()
+    fewshot = spec.get("fewshot", [])
+    if not fewshot:
+        raise ValueError("ollama provider needs at least one fewshot exemplar")
+
+    # Render fewshot as JSONL block (single-line objects) so the model sees the
+    # exact output shape it must emit.
+    fewshot_block = "\n".join(json.dumps(ex, ensure_ascii=False) for ex in fewshot)
+    user_template = spec.get("user_prompt_template", "請產生 {n} 則符合上述標註的 JSONL。")
+
+    out: list[dict] = []
+    seen: set[str] = set()
+    rng = random.Random(seed)
+    round_idx = 0
+    max_rounds = 6  # over-generate to compensate for dup / invalid lines
+
+    # Per-round generation target (slightly oversized to absorb losses)
+    per_round = max(4, min(n, 16))
+
+    while len(out) < n and round_idx < max_rounds:
+        round_idx += 1
+        req_n = min(per_round, n - len(out) + 4)
+        round_seed = seed * 1000 + round_idx
+        user_msg = user_template.format(n=req_n)
+        # Append fewshot demonstration as an assistant turn so the model sees
+        # the exact JSONL output shape and won't wrap output in code fences.
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"請先示範{len(fewshot)} 行符合規範的 JSONL（僅給 reference，不要重覆於後續輸出）。"},
+            {"role": "assistant", "content": fewshot_block},
+            {"role": "user", "content": user_msg + "\n\n請只輸出 JSONL，不要任何說明文字、不要 markdown code fence。"},
+        ]
+        body = json.dumps({
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": 0.85,
+                "top_p": 0.92,
+                "seed": round_seed,
+                "num_predict": 1400,
+            },
+        }, ensure_ascii=False).encode("utf-8")
+
+        url = f"{host}/api/chat"
+        req = urllib.request.Request(url, data=body, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=240) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.URLError as e:
+            print(f"[ollama] request failed (round {round_idx}): {e}", file=sys.stderr)
+            continue
+
+        text = (payload.get("message") or {}).get("content", "")
+        if not text:
+            print(f"[ollama] empty response (round {round_idx})", file=sys.stderr)
+            continue
+
+        # Strip accidental code fences, parse line-by-line.
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("```"):
+                continue
+            # Some models wrap as [ {...}, {...} ] — try array first.
+            if line.startswith("[") or line.startswith("{") and line.endswith("},"):
+                try:
+                    arr = json.loads(line.rstrip(","))
+                    candidates = arr if isinstance(arr, list) else [arr]
+                except Exception:
+                    candidates = []
+            else:
+                try:
+                    candidates = [json.loads(line)]
+                except Exception:
+                    continue
+            for obj in candidates:
+                if not isinstance(obj, dict) or "data" not in obj:
+                    continue
+                txt = (obj.get("data") or "").strip()
+                if not txt or txt in seen:
+                    continue
+                # minimal schema patch — required by _raw_to_synth_row downstream
+                if target_label == "T4_Misleading":
+                    if not obj.get("verification_timeline"):
+                        continue
+                    if obj["verification_timeline"] not in {
+                        "within_2_years", "between_2_and_5_years", "longer_than_5_years",
+                    }:
+                        continue
+                elif target_label == "T2_within_2_years":
+                    es = obj.get("evidence_status")
+                    if es not in {"Yes", "No"}:
+                        # allow model to omit -> default to "No"
+                        obj["evidence_status"] = "No"
+                        obj["evidence_quality"] = "N/A"
+                    elif es == "Yes" and obj.get("evidence_quality") not in {"Clear", "Not Clear"}:
+                        continue
+                seen.add(txt)
+                out.append(obj)
+                if len(out) >= n:
+                    break
+            if len(out) >= n:
+                break
+
+    if len(out) < n:
+        print(
+            f"[ollama] WARN: only produced {len(out)}/{n} rows after {round_idx} rounds",
+            file=sys.stderr,
+        )
+    # deterministic order with a tiny shuffle keyed on seed for reproducibility
+    rng.shuffle(out)
+    return out[:n]
 
 
 def ap_providers() -> dict[str, ProviderFn]:

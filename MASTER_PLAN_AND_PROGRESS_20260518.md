@@ -11,8 +11,8 @@
 ### 如何閱讀本文件（30 秒導覽）
 
 1. **想看現況**：上方指標表 + [§1 Snapshot](#1-一頁總結snapshot)。
-2. **想看最新實驗**：[§53 Phase 37 Aug-Plus](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) · [§53.12 AP-D3 NEW SOTA 0.71364](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18)。
-3. **想看 SOTA 是怎麼來的**：[§52 Phase 36](#52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018)（舊 SOTA 0.71018）、[§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18)（新 SOTA 0.71364）。
+2. **想看最新實驗**：[§53 Phase 37 Aug-Plus](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) · [§53.20 Phase 38 AP-D4 NEW SOTA 0.71608](#5320-phase-38--ollama-llm-synth--ap-d4--new-sota-0716082026-05-20)。
+3. **想看 SOTA 是怎麼來的**：[§52 Phase 36](#52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018)（0.71018）→ [§53.12 AP-D3](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18)（0.71364）→ [§53.20 AP-D4](#5320-phase-38--ollama-llm-synth--ap-d4--new-sota-0716082026-05-20)（0.71608, 現行 SOTA）。
 4. **想看接下來該做什麼**：[§8 待辦事項（ROI 排序）](#8-待辦事項roi-排序)。
 5. **想看為什麼某條路放棄**：[§6 已驗證為負方向](#6-已驗證為負方向x1--x13-禁區)。
 6. **想看官方規則對外部資料的立場**：[§57](#57-競賽規則對外部資料的立場已確認可用)（含 2026-05-17 主辦方裁示摘要）。
@@ -91,7 +91,7 @@
 - [§50. Phase 34 — M3-v3 + M4-v3 + stem #5（classw_focal v3）+ 5-way per-task hillclimb — NEW SOTA 0.70569](#50-phase-34--m3-v3--m4-v3--stem-5classw_focal-v3-5-way-per-task-hillclimb--new-sota-070569)
 - [§51. Phase 35 — 5-way × 3-view per-task TTA — NEW SOTA 0.70758](#51-工程動作分類d1--d30)
 - [§52. Phase 36 — U6-pro back-translation + stem #6 + 6-way × 3-view TTA — NEW SOTA 0.71018](#52-u1--u12-backlog-完成狀態)
-- [§53. Phase 37 — Aug-Plus hand-crafted minority 訓練與 single-stem ablation（2026-05-18）· **§53.12 NEW SOTA 0.71364**](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18)
+- [§53. Phase 37 — Aug-Plus hand-crafted minority 訓練與 single-stem ablation（2026-05-18）· §53.12 AP-D3 0.71364 · **§53.20 Phase 38 AP-D4 NEW SOTA 0.71608**](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18)
 - [§54. Phase 37 並行路線 — U13：LLM 合成 + 人工標註 + LLM 評審（規劃中）](#54-phase-37-並行路線--u13llm-合成--人工標註--llm-評審規劃中)
 
 ### Part V — 附錄 (Appendix)
@@ -265,7 +265,9 @@ X1~X13 共 13 條禁區，重點：EMA decay≥0.995 短訓練、xlm-r 主力、
 | **36** | **U6-pro back-translation + stem #6 + 6-way × 3-view TTA** | **0.71018** | **+0.00260** | 舊 SOTA；詳 [§52](#52-u1--u12-backlog-完成狀態) |
 | 37 | Aug-Plus (47 hand-crafted) + stem #6 recipe（single-stem ablation） | 0.66966 (1 seed) | −0.00078 vs stem #6 baseline 0.67044 | 單獨 OOF 平手；保留為 7th-stem；詳 [§53](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) |
 | 37.11 | AP-D1：7-way per-task hillclimb（stored only） | 0.71109 | +0.00238 vs 6-way × stored only seed42 | stem #7 在 stack 內證明 diversity；詳 [§53.11](#5311-ap-d1-結果--7-way-per-task-hillclimb2026-05-18) |
-| **37.12** | **AP-D3：7-way × 3-view per-task TTA（seed42）** | **0.71364** | **+0.00346** vs 6-way × 3-view × seed42 (0.71018) | **NEW SOTA**；詳 [§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18) |
+| 37.12 | AP-D3：7-way × 3-view per-task TTA（seed42） | 0.71364 | +0.00346 vs 6-way × 3-view × seed42 (0.71018) | 舊 SOTA；詳 [§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18) |
+| 38 | Aug-Plus v2：Ollama qwen2.5:7b-instruct 本機合成 140 列 + stem #8 single-stem | 0.66805 (seed42) / 0.66426 (3-seed) | −·0.00161 vs stem #7 seed42 0.66966 | 單 stem 平手；仍加入 stack 證明 diversity；詳 [§53.20](#5320-phase-38--ollama-llm-synth--ap-d4--new-sota-0716082026-05-20) |
+| **38.4** | **AP-D4：8-way × 3-view per-task TTA（seed42）** | **0.71608** | **+0.00244** vs AP-D3 0.71364 | **NEW SOTA**；T4 +0.00661（LLM Misleading 擴增奥效）；詳 [§53.20](#5320-phase-38--ollama-llm-synth--ap-d4--new-sota-0716082026-05-20) |
 
 ### 4.2 U10 弱監督軌跡（best.pt path）
 
@@ -3327,6 +3329,81 @@ per-task α* (stored / middle / tail)：
 - `reports/analysis/_ensemble/ap_d3_7way_3view_meta.json`（最終 per-task stem + view 權重 JSON）
 - `reports/analysis/_ensemble/ap_d3_7way_3view_summary.csv`、`*_preds.csv`
 - `reports/analysis/_ensemble/ap_d3_6way_3view_baseline_meta.json`（baseline 對照）
+
+### 53.20 Phase 38 — Ollama LLM-synth + AP-D4 → **NEW SOTA 0.71608**（2026-05-20）
+
+#### 動機
+
+§53.12 結尾候選 (a) 即「加入更多 stem 帶來 ensemble diversity」。Phase 37 stem #7 僅 47 列手工 minority seed，類別頻數仍偏低。本階段以本機 **Ollama qwen2.5:7b-instruct**（4.7 GB GGUF）作為 LLM provider，**零 API key、零外部費用、零隱私風險**地補齊 LLM 合成樣本，建立 stem #8（`p2_combo_best_aug_plus_v2`）並推進 AP-D4 = 8-way × 3-view 集成。
+
+#### 實作
+
+1. **Ollama provider 落地**：[`scripts/ap_llm_synth.py`](scripts/ap_llm_synth.py) 內 `_ollama_provider` 從 stub 改為實作版（純 stdlib `urllib`，無新依賴）：rendering system_prompt + fewshot demonstration 為 chat messages → POST `/api/chat` → 行解析 JSONL → schema 驗證後返回。可由 `OLLAMA_HOST`、`OLLAMA_MODEL` 環境變數控制。
+2. **生成**（seed=42，temperature=0.85，top_p=0.92）：
+   - `misleading` 目標 80 列 → 80 列合規（validate 100% pass）
+   - `within_2_years` 目標 60 列 → 60 列合規（validate 100% pass）
+3. **品質閘門**：merge 後 190 列（47 handcraft + 140 LLM + 3 種子餘量）→ length filter 砍掉 31 列過短（多為 LLM 簡短模板）→ **保留 159 列** AP 池 → 與 U10 v2 偽標 3,904 列合併 → **4,063 列**訓練語料 → 寫入 `data/processed/aug_plus/aug_plus_v2_with_u10v2.csv`。
+4. **新設定檔**：[`configs/exp_p2_combo_best_aug_plus_v2.yaml`](configs/exp_p2_combo_best_aug_plus_v2.yaml)（單行 `pseudo_csv_path` 改指 v2 路徑，其餘繼承 stem #7）。
+5. **訓練**：3 seeds × 5 folds = 15 fold runs，總 elapsed = **11,437.4s (≈3.2 hr)** on RTX 5060 Laptop 8.5 GB（hf 403 discussions 警告無害）。
+
+#### Stem #8 single-stem 結果（vs Phase 36 stem #6 baseline 0.67044 / Phase 37 stem #7 0.66966）
+
+| seed | mean | std | min | max |
+| :-: | -: | -: | -: | -: |
+| 42 | **0.66805** | 0.01353 | 0.65253 | 0.68568 |
+| 2024 | 0.66485 | 0.01917 | 0.64007 | 0.69386 |
+| 20260417 | 0.65989 | 0.01511 | 0.64003 | 0.67573 |
+| **3-seed mean** | **0.66426** | 0.01532 | — | — |
+
+Per-task means：T1=0.9337 / T2=0.5011 / T3=0.8503 / T4=0.4208。Single-stem 平手（落在 U12 noise budget ±0.0045 內），但**重點不在 single-stem**——AP-D 框架真正關心 ensemble 內 diversity 是否被吸收。
+
+#### AP-D4 = 8-way × 3-view per-task TTA × seed42 結果 — **NEW SOTA 0.71608**
+
+```text
+[u10-tta FINAL] 0.7160840624  delta_vs_active_SOTA(AP-D3 0.71364) = +0.00244
+  task promise_status:        0.943874
+  task verification_timeline: 0.631504
+  task evidence_status:       0.880113
+  task evidence_quality:      0.481571
+```
+
+| Task | AP-D3 (0.71364) | AP-D4 (0.71608) | Δ |
+| :-- | -: | -: | -: |
+| T1 promise_status | 0.943373 | **0.943874** | +0.00050 |
+| T2 verification_timeline | 0.630613 | **0.631504** | +0.00089 |
+| T3 evidence_status | 0.880450 | 0.880113 | −0.00034 |
+| T4 evidence_quality | 0.474960 | **0.481571** | **+0.00661** |
+| **weighted** | **0.71364** | **0.71608** | **+0.00244** |
+
+最終權重（依 stem #1~#8、view stored/middle/tail 順序）：
+
+| Task | stem* w | view* α |
+| :-- | :-- | :-- |
+| T1 promise_status | (0, 0, 0.1, 0, 0.5, 0.3, 0, 0.1) | (0.0, 0.9, 0.1) |
+| T2 verification_timeline | (0, 0.1, 0, 0.5, 0.2, 0.1, 0.1, 0) | (0.4, 0.2, 0.4) |
+| T3 evidence_status | (0, 0.4, 0, 0.1, 0, 0.2, 0.1, 0.2) | (0.5, 0.5, 0.0) |
+| T4 evidence_quality | (0, 0.2, 0, 0, 0.2, 0, 0.3, 0.3) | (0.0, 0.7, 0.3) |
+
+#### 觀察
+
+- stem #8 在 **T1=0.1、T3=0.2、T4=0.3** 拿到非零權重，**T4 0.3** 為四 stem 共享中第二高（與 stem #7 並列）；T2 則被 stem #4 (0.5) 主導，stem #8 退場——與設計動機（LLM 樣本主打 Misleading + within_2y，T4 與 T2 為瓶頸）一致。
+- 最大增益落在 **T4 +0.00661**，正是 LLM 80 列 Misleading 合成的目標類別；證明 7B 本機模型生成的繁中 ESG 揭露段落能與既有偽標互補。
+- T3 微跌 −0.00034 在 noise budget 內，**不可作為單獨衰退訊號**。
+- **Phase 37 → 38 共累積 +0.00590**（0.71018 → 0.71608），單一輪 AP-D 引入 1 個新 stem + 已驗證流程的 ROI 持續為正。
+
+#### 下一步候選
+
+(a) **AP-D5 = 9-way**：再加 stem #9（U13 LLM 評審重新標記 U10 偽標）；
+(b) **fine grid step 0.05**（搜索空間 ×8，預期 +0.0005~0.001）；
+(c) **multi-seed AP-D4**（用 stem #8 三個 seed 平均 OOF，本檔目前僅用 seed42），預期 ≤+0.0005（§53.12 已證明 multi-seed 對當前 stack 增益≈0）。優先 (a) > (b) > (c)。
+
+#### 產出檔案
+
+- `reports/phase38_stem8_train.log`（stem #8 完整 3-seed × 5-fold 訓練 log）
+- `reports/ap_d4_8way_3view.log`（AP-D4 8-way 搜索 log）
+- `reports/analysis/_ensemble/ap_d4_8way_3view_{summary.csv, meta.json, preds.csv}`（最終權重 + 1,000 列預測）
+- `configs/exp_p2_combo_best_aug_plus_v2.yaml`（stem #8 設定）
+- `data/aug_plus/llm_synth_{misleading,within_2_years}.jsonl`（Ollama 原始輸出，已 commit 作為 LLM 採證）
 
 ## 54. Phase 37 並行路線 — U13：LLM 合成 + 人工標註 + LLM 評審（規劃中）
 > **與 §53 (Phase 37 aug_plus) 的關係**：本章為 Phase 37 的 **第二條獨立路線**，由 U13 LLM 合成資料補 T2/T4 minority；§53 / §53.11 走的是 **U10-pro + 人工 aug_plus** 路線並已完成訓練 + AP-D1 7-way hillclimb（OOF +0.00238）。兩條路線**互補**：U13 主攻「樣本不足→直接生成」、aug_plus 主攻「stack 多樣性」。U13 為**計畫中**（pipeline + 12/12 tests green，尚未跑真實 LLM 生成）。

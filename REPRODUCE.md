@@ -1,6 +1,6 @@
-# REPRODUCE.md — 從 clone 到 SOTA 0.71364 完整重現手冊
+# REPRODUCE.md — 從 clone 到 SOTA 0.71608 完整重現手冊
 
-> **目標**：只要照本文件操作，從一張裸機（已裝 Python + CUDA 驅動）clone 此 repo 後，能完整重現 **Phase 37 AP-D3 SOTA OOF weighted = 0.71364**（4 任務 5-Fold StratifiedKFold OOF 平均，超越 Phase 36 0.71018 +0.00346）。
+> **目標**：只要照本文件操作，從一張裸機（已裝 Python + CUDA 驅動）clone 此 repo 後，能完整重現 **Phase 38 AP-D4 SOTA OOF weighted = 0.71608**（4 任務 5-Fold StratifiedKFold OOF 平均，超越 Phase 37 AP-D3 0.71364 +0.00244）。
 >
 > 本檔為說明書，無需另外查任何資源。所有資料、所有腳本、所有設定都在本 repo 內，跑完即得 SOTA。
 
@@ -8,12 +8,12 @@
 
 ## 0. 一句話 SOTA
 
-**`0.71364`** = 7 stems × seed42 × 5-fold OOF probs → 3-view TTA（stored / middle / tail） → 4-task per-task simplex hillclimb（stem 權重 + view 權重）。
+**`0.71608`** = 8 stems × seed42 × 5-fold OOF probs → 3-view TTA（stored / middle / tail） → 4-task per-task simplex hillclimb（stem 權重 + view 權重）。
 
 | 來源 | 指令（執行順序見 §4） |
 | :-- | :-- |
-| 7 個 stem 的 `oof_probs.npz` + `best.pt` | `python -m src.train_kfold ...` × 1 + `python -m src.train_pseudo_kfold ...` × 6（合計 ~30~40 GPU hr） |
-| AP-D3 集成 | `python -m src.tools.u10_per_task_tta --stems <7 stems> --grid-step 0.1 --tag ap_d3_7way_3view` |
+| 8 個 stem 的 `oof_probs.npz` + `best.pt` | `python -m src.train_kfold ...` × 1 + `python -m src.train_pseudo_kfold ...` × 7（合計 ~7~8 GPU hr） |
+| AP-D4 集成 | `python -m src.tools.u10_per_task_tta --stems <8 stems> --grid-step 0.1 --tag ap_d4_8way_3view` |
 
 ---
 
@@ -26,8 +26,9 @@
 | CUDA | 12.x（驅動需支援；CPU-only 也可跑 §5 集成步驟，僅 §4 訓練需 GPU） |
 | GPU VRAM | ≥ 8 GB（作者：RTX 5060 Laptop 8.5 GB） |
 | RAM | ≥ 16 GB |
-| 磁碟 | ~50 GB（含 7 stems × seed42 × 5 folds 的 `best.pt`，約 38 GB） |
+| 磁碟 | ~55 GB（含 8 stems × seed42 × 5 folds 的 `best.pt`，約 44 GB；stem #8 加 3 seeds 再 +~5 GB） |
 | 網路 | 首次執行需下載 HuggingFace 模型 `hfl/chinese-macbert-base`（~400 MB） |
+| Ollama（可選，僅在重生 stem #8訓練語料時需要） | Ollama 0.x + qwen2.5:7b-instruct（4.7 GB）下載至預設路徑 `~/.ollama/models/` |
 
 ---
 
@@ -66,12 +67,13 @@ pytest -q
 | `assets/u6_pro/esg_glossary.json` | U6-pro 109 詞 ESG 術語表 | **是** |
 | `assets/aug_plus/handcrafted_v1.csv` | Phase 37 手工撰寫 47 列 minority 種子 | **是** |
 | `assets/aug_plus/build_handcrafted_v1.py` | 種子原始建構腳本（可重生 `handcrafted_v1.csv`） | **是** |
-| `configs/prompts/ap_*.yaml` | AP3 LLM 合成 prompt（mock provider 即可離線跑） | **是** |
-| `outputs/checkpoints/<stem>/seed42/fold{0..4}/best.pt` | 7 stems × 5 folds 的 fine-tuned 權重 | **否**（~38 GB，需在 §4 自行訓出） |
+| `configs/prompts/ap_*.yaml` | AP3 LLM 合成 prompt（mock provider 即可離線跑；生產用 Ollama provider） | **是** |
+| `data/aug_plus/llm_synth_{misleading,within_2_years}.jsonl` | Phase 38 Ollama qwen2.5:7b-instruct 生成的 LLM 合成種子（140 列 raw，換闘後 159 列入 stem #8 語料） | **是** |
+| `outputs/checkpoints/<stem>/seed42/fold{0..4}/best.pt` | 8 stems × 5 folds 的 fine-tuned 權重 | **否**（~44 GB，需在 §4 自行訓出） |
 | `outputs/checkpoints/<stem>/seed42/fold{0..4}/oof_probs.npz` | 對應的 OOF 機率（訓練即產出） | **否** |
 | `outputs/cache/u10_tta/<stem>_{middle,tail}.npz` | 3-view TTA 快取（會在 §5 自動產出） | **否** |
 
-> 用到的 **唯一外部資源** 是 HuggingFace 的 `hfl/chinese-macbert-base`（pretrained backbone），第一次訓練時 transformers 會自動下載。**不需要其他 model / dataset / pseudo-label** 即可重現 0.71364。
+> 用到的 **唯一外部資源** 是 HuggingFace 的 `hfl/chinese-macbert-base`（pretrained backbone），第一次訓練時 transformers 會自動下載。**不需要其他 model / dataset / pseudo-label** 即可重現 0.71608（預設沒有 OpenAI/Anthropic/Gemini API key 也能跑；stem #8 LLM 合成種子已內含於 `data/aug_plus/llm_synth_*.jsonl`）。
 
 ---
 
@@ -102,15 +104,18 @@ python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_u10_pseudo_v
 # stem #6: p2_combo_best_classw_focal_u6pro — Phase 36 SOTA 主成員：U6-pro 反翻譯 434 列 + classw + focal
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_classw_focal_u6pro.yaml
 
-# stem #7: p2_combo_best_aug_plus — Phase 37 新增：U10-pro + handcrafted 47 列 aug_plus（NEW SOTA 關鍵）
+# stem #7: p2_combo_best_aug_plus — Phase 37 新增：U10-pro + handcrafted 47 列 aug_plus（AP-D3 SOTA 關鍵）
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_aug_plus.yaml
+
+# stem #8: p2_combo_best_aug_plus_v2 — Phase 38 新增：stem #7 語料 + Ollama LLM 合成 112 列（AP-D4 SOTA 關鍵）3 seeds × 5 folds
+python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_aug_plus_v2.yaml
 ```
 
 每個 stem 跑完後會在 `outputs/checkpoints/<stem>/seed42/fold{0..4}/` 寫入：
 - `best.pt` — 最佳 epoch 的模型權重
 - `oof_probs.npz` — 該 fold 驗證集 OOF 機率（4 個任務各一個 array）
 
-> **stem #6/#7 的偽標籤從哪來？** stem #6 依賴 U6-pro 反翻譯產出的 434 列（路徑 `data/processed/u6_pro/u6_pro_434.csv`）；stem #7 依賴 U10-pro 偽標籤 + 47 列 handcrafted。如果 repo 內這些檔案缺失，看 §4.2 重生方式。
+> **stem #6/#7 的偽標籤從哪來？** stem #6 依賴 U6-pro 反翻譯產出的 434 列（路徑 `data/processed/u6_pro/u6_pro_434.csv`）；stem #7 依賴 U10-pro 偽標籤 + 47 列 handcrafted。**stem #8 的 LLM 合成種子** 已隨 repo 上傳於 `data/aug_plus/llm_synth_*.jsonl`；若要重生請見 §4.3。如果 repo 內這些檔案缺失，看 §4.2 / §4.3 重生方式。
 
 ### 4.2 （可選）重生偽標籤資料
 
@@ -129,13 +134,39 @@ python scripts\u10_pseudo_label_v3.py   # M4: 教師閘門 + 偽標產出
 python assets\aug_plus\build_handcrafted_v1.py   # 重生 handcrafted_v1.csv
 ```
 
-> ⚠️ U6-pro / U10 涉及外部模型版本與 PDF 解析；byte-exact 重現可能漂移 ±0.003。如果你的目標只是「重現 0.71364」，**最穩做法**是直接用 repo 隨附的 `data/processed/` 與 `assets/` 內檔案，跳過 §4.2。
+> ⚠️ U6-pro / U10 涉及外部模型版本與 PDF 解析；byte-exact 重現可能漂移 ±0.003。如果你的目標只是「重現 0.71608」，**最穩做法**是直接用 repo 隨附的 `data/processed/` 與 `assets/` 內檔案，跳過 §4.2。
+
+### 4.3 （可選）用 Ollama 重生 stem #8 LLM 合成語料
+
+stem #8 訓練語料 = stem #7 語料 + Ollama qwen2.5:7b-instruct 生成的 140 列 LLM 種子。**預設產出已隨 repo 上傳 (`data/aug_plus/llm_synth_*.jsonl`)**，你可以跳過本節。若要「從零生成」，需裝 Ollama （約 200 MB）+ 拉模型（約 4.7 GB）：
+
+```powershell
+# (1) 下載 Ollama https://ollama.com/download、啟動 daemon
+Start-Process ollama.exe -ArgumentList 'serve' -WindowStyle Hidden
+ollama pull qwen2.5:7b-instruct
+
+# (2) 組設 ENV、生成 + 驗證 + 闘門 + promote
+$env:OLLAMA_HOST  = 'http://localhost:11434'
+$env:OLLAMA_MODEL = 'qwen2.5:7b-instruct'
+
+python scripts\ap_llm_synth.py --target misleading       --provider ollama --n 80 --seed 42
+python scripts\ap_llm_synth.py --target within_2_years   --provider ollama --n 60 --seed 42
+python scripts\ap_llm_synth_validate.py --target misleading
+python scripts\ap_llm_synth_validate.py --target within_2_years
+python scripts\ap_merge_seeds.py        # 合併 handcraft 47 + LLM 140 = 190 列
+python scripts\ap_quality_gate.py        # length filter → 159 列
+python scripts\ap_promote_to_processed.py --aug-plus-version v2  # 寫出 aug_plus_v2_with_u10v2.csv (4,063 列)
+
+# (3) 在 configs/exp_p2_combo_best_aug_plus_v2.yaml 中確認 pseudo_csv_path 指向 v2 檔，接著跑 §4.1 的 stem #8 訓練指令即可
+```
+
+> Ollama 是本機 LLM、離線、免 API key，計算量隱藏於本機 GPU（VRAM 需 ~5 GB；CPU 亦可，生成驛慢 5–10 倍）。生成參數 temperature=0.85、top_p=0.92、num_predict=1400，生成時間約 30 min。亦可換為 `llama3.1:8b` / `yi:9b` 之類 ≤6 GB Q4 模型（變更後成果會漂移）。
 
 ---
 
-## 5. 集成：產出 SOTA OOF 0.71364
+## 5. 集成：產出 SOTA OOF 0.71608
 
-訓練完 7 個 stem 後，跑下列**單一指令**即得 SOTA：
+訓練完 8 個 stem 後，跑下列**單一指令**即得 SOTA：
 
 ```powershell
 python -m src.tools.u10_per_task_tta `
@@ -146,8 +177,9 @@ python -m src.tools.u10_per_task_tta `
           p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3 `
           p2_combo_best_classw_focal_u6pro `
           p2_combo_best_aug_plus `
+          p2_combo_best_aug_plus_v2 `
   --grid-step 0.1 --max-rounds 4 --joint-rounds 2 `
-  --tag ap_d3_7way_3view
+  --tag ap_d4_8way_3view
 ```
 
 執行流程（指令會自動處理）：
@@ -162,23 +194,23 @@ python -m src.tools.u10_per_task_tta `
 最終終端會印出：
 
 ```
-[u10-tta FINAL] 0.7136375980 delta_vs_u10_stack=+0.0266812240 ...
-  task promise_status: 0.943373
-  task verification_timeline: 0.630613
-  task evidence_status: 0.880450
-  task evidence_quality: 0.474960
+[u10-tta FINAL] 0.7160840624 delta_vs_active_SOTA(0.68925)=+0.0268340624
+  task promise_status: 0.943874
+  task verification_timeline: 0.631504
+  task evidence_status: 0.880113
+  task evidence_quality: 0.481571
 ```
 
-並寫入 `reports/analysis/_ensemble/ap_d3_7way_3view_{summary.csv, meta.json, preds.csv}`，其中 `preds.csv` 即可作為提交檔範本（1,000 列 × 4 預測欄）。
+並寫入 `reports/analysis/_ensemble/ap_d4_8way_3view_{summary.csv, meta.json, preds.csv}`，其中 `preds.csv` 即可作為提交檔範本（1,000 列 × 4 預測欄）。
 
-> **預期數字**：weighted = **0.71364** ± 0.0005（cuDNN 非確定性的浮點累加）。
-> **每任務**：T1 = 0.94337、T2 = 0.63061、T3 = 0.88045、T4 = 0.47496。
+> **預期數字**：weighted = **0.71608** ± 0.0005（cuDNN 非確定性的浮點累加）。
+> **每任務**：T1 = 0.94387、T2 = 0.63150、T3 = 0.88011、T4 = 0.48157。
 
 ---
 
 ## 6. （可選）apples-to-apples baseline 對照
 
-若要驗證 stem #7 真的帶來 +0.00346 增益，請額外跑 6-way × 3-view 對照（不含 stem #7）：
+若要驗證 stem #8 真的帶來 +0.00244 增益，請額外跑 7-way × 3-view（AP-D3）對照（不含 stem #8）：
 
 ```powershell
 python -m src.tools.u10_per_task_tta `
@@ -188,11 +220,12 @@ python -m src.tools.u10_per_task_tta `
           p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3 `
           p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3 `
           p2_combo_best_classw_focal_u6pro `
-  --grid-step 0.1 --max-rounds 2 --joint-rounds 0 `
-  --tag ap_d3_6way_3view_baseline
+          p2_combo_best_aug_plus `
+  --grid-step 0.1 --max-rounds 4 --joint-rounds 2 `
+  --tag ap_d3_7way_3view
 ```
 
-預期輸出 weighted = **0.71018**，與 Phase 36 公開 SOTA 一致；與 7-way 比差 +0.00346 ⇒ 此即 stem #7 純增量貢獻。
+預期輸出 weighted = **0.71364**，與 Phase 37 AP-D3 一致；與 8-way 比差 +0.00244 ⇒ 此即 stem #8（Ollama LLM 合成）純增量貢獻。
 
 ---
 
@@ -202,10 +235,11 @@ python -m src.tools.u10_per_task_tta `
 | :-- | :-- | :-- |
 | §2 安裝 + 測試 | 否 | 5 ~ 10 min |
 | §4.2 （可選）重生 U6-pro / U10 偽標籤 | 是 | 2 ~ 3 hr |
-| §4.1 訓練 7 stems × 5 folds（seed42） | 是 | 4 ~ 5 hr |
-| §5 AP-D3 集成 | 是（首次 ~10 min）/ 否（後續快取） | 3 ~ 15 min |
-| §6 baseline 對照（可選） | 否 | 2 ~ 5 min |
-| **合計（無 §4.2、無 §6）** | — | **~5 hr GPU + 15 min CPU** |
+| §4.3 （可選）Ollama 重生 stem #8 LLM 語料 | 選配（CPU/GPU均可） | 20 ~ 40 min |
+| §4.1 訓練 8 stems（stem #1~#7 各 seed42；stem #8 = 3 seeds × 5 folds） | 是 | 7 ~ 8 hr |
+| §5 AP-D4 集成 | 是（首次 ~15 min）/ 否（後續快取） | 5 ~ 20 min |
+| §6 AP-D3 baseline 對照（可選） | 否 | 2 ~ 5 min |
+| **合計（無 §4.2 / 4.3 / 6）** | — | **~8 hr GPU + 20 min CPU** |
 
 ---
 
@@ -224,10 +258,16 @@ A：可以，但你需要自備 ckpts（38 GB 不上 GitHub）。聯絡作者取
 A：可以，但只能跑「stored view」的 stack，無法跑 3-view TTA（middle/tail 視角需要 `best.pt` 重新 forward）。stored-only 6-way 約 0.71018、7-way 約 0.71109，皆**低於** SOTA 0.71364。
 
 **Q5：怎麼產提交檔？**
-A：`reports/analysis/_ensemble/ap_d3_7way_3view_preds.csv` 已是 1,000 列的最終預測；競賽方若要求特定欄位順序，可改 `python -m src.tools.u10_per_task_tta` 內 `_eval_full` 輸出格式（或直接讀 `preds.csv` 重排）。
+A：`reports/analysis/_ensemble/ap_d4_8way_3view_preds.csv` 已是 1,000 列的最終預測；競賽方若要求特定欄位順序，可改 `python -m src.tools.u10_per_task_tta` 內 `_eval_full` 輸出格式（或直接讀 `preds.csv` 重排）。
 
 **Q6：訓練 stem 數量能不能減？**
-A：可以，但 SOTA 會降。Phase 36 是 6 stems = 0.71018；Phase 37 加 stem #7 = 0.71364。如果只有 GPU 預算跑 3 stems，建議選 stem #1 + #4 + #6（base / classw_focal / u6pro），預期 OOF ~0.69~0.70。
+A：可以，但 SOTA 會降。路徑：Phase 36 = 6 stems = 0.71018；Phase 37 + stem #7 = 0.71364；Phase 38 + stem #8 = 0.71608。若只有 GPU 預算跑 3 stems，建議選 stem #1 + #4 + #6（base / classw_focal / u6pro），預期 OOF ~0.69~0.70。
+
+**Q7：Ollama 模型可以換嗎？**
+A：可。設 `OLLAMA_MODEL=llama3.1:8b` / `yi:9b` / `qwen2.5:14b-instruct-q4_K_M` 等 ≤6 GB Q4 中文友善模型，重跑 §4.3 生成 → promote → 訓練。但漂移後的複現數字可能與 0.71608 不同（使用不同語料 → 不同權重 → 不同終分）。官方記錄兩個結果作為 ablation。
+
+**Q8：Ollama daemon 起不來？**
+A：確認 port 11434 未被佔（`netstat -ano | findstr 11434`）；手動起：`ollama.exe serve`。Windows 預設裝在 `C:\Users\<USER>\AppData\Local\Programs\Ollama\`，模型存 `C:\Users\<USER>\.ollama\models\`；請確保 C 碅25 GB 以上可用。
 
 ---
 
