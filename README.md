@@ -4,6 +4,8 @@
 > 採 **8 stems × seed42 × 5-fold × 3-view TTA × per-task hillclimb** 集成法（AP-D4），加入 **Ollama qwen2.5:7b-instruct 本機 LLM 合成**補強少數類樣本，
 > 在官方 1,000 筆訓練集上以 5-Fold Stratified CV 取得 **OOF weighted score = 0.71608**（NEW SOTA，2026-05-20）。
 >
+> **作者**：Eric Chen\*Copilot
+>
 > **➜ 想直接複現 SOTA？請看 [REPRODUCE.md](REPRODUCE.md)，從 clone 到 0.71608 的一站式說明書。**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -74,6 +76,7 @@ Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 | **Phase 36** | + U6-pro 反翻譯擴增 & 6-way × 3-view × per-task hillclimb | **0.71018** |
 | Phase 37 | + Aug-Plus 47 列親撞種子（single-stem ablation, seed=42）→ 7-way × 3-view（AP-D3） | 0.71364 |
 | **Phase 38** | + Ollama qwen2.5:7b-instruct 本機 LLM 合成 （stem #8）→ **8-way × 3-view（AP-D4）** | **0.71608** |
+| Phase 39 | AP-D5 grid 0.05 細粒度權重搜索可行性評估（單機 Stage A 單輪 ≈3h，列為負面消融；SOTA 維持 AP-D4） | 0.71608（unchanged） |
 
 完整實驗紀錄見 [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md)。
 
@@ -424,9 +427,9 @@ A. 正常。cuDNN 非決定性、torch 浮點累加順序、tokenizer 版本（4
 若本程式碼對您的研究有幫助，請引用 MASTER_PLAN：
 
 ```bibtex
-@misc{veripromise2026_phase36,
-  title  = {VeriPromise ESG 2026 — Phase 36 SOTA Pipeline (0.71018 OOF)},
-  author = {ericchen2023},
+@misc{veripromise2026_phase38,
+  title  = {VeriPromise ESG 2026 — Phase 38 AP-D4 SOTA Pipeline (0.71608 OOF)},
+  author = {Eric Chen and {GitHub Copilot}},
   year   = {2026},
   howpublished = {\url{https://github.com/ericchen2023/esg-veripromise-2026}}
 }

@@ -3,6 +3,8 @@
 > **目標**：只要照本文件操作，從一張裸機（已裝 Python + CUDA 驅動）clone 此 repo 後，能完整重現 **Phase 38 AP-D4 SOTA OOF weighted = 0.71608**（4 任務 5-Fold StratifiedKFold OOF 平均，超越 Phase 37 AP-D3 0.71364 +0.00244）。
 >
 > 本檔為說明書，無需另外查任何資源。所有資料、所有腳本、所有設定都在本 repo 內，跑完即得 SOTA。
+>
+> **作者**：Eric Chen\*Copilot
 
 ---
 
