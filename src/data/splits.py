@@ -83,6 +83,41 @@ def load_folds(path: str | Path) -> list[tuple[np.ndarray, np.ndarray]]:
     ]
 
 
+def verify_canonical_folds(
+    folds: list[tuple[np.ndarray, np.ndarray]],
+    canonical_path: str | Path,
+) -> tuple[bool, list[str]]:
+    """Compare freshly computed folds against a committed canonical JSON.
+
+    Used as a Phase 1 reproducibility tripwire: if a future sklearn upgrade or
+    config drift causes ``StratifiedKFold`` to assign samples differently, the
+    mismatch will surface here instead of silently changing every stem's OOF.
+
+    Returns:
+        (ok, messages): ``ok`` is True iff every fold's train/val indices match
+        bit-exact; ``messages`` lists per-fold diffs when not ok.
+    """
+    p = Path(canonical_path)
+    if not p.exists():
+        return False, [f"canonical folds JSON not found: {p}"]
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    msgs: list[str] = []
+    if int(payload.get("n_splits", -1)) != len(folds):
+        msgs.append(
+            f"n_splits mismatch: canonical={payload.get('n_splits')} actual={len(folds)}"
+        )
+    for i, (tr, va) in enumerate(folds):
+        if i >= len(payload["folds"]):
+            msgs.append(f"fold {i}: missing in canonical")
+            continue
+        ref = payload["folds"][i]
+        if list(map(int, tr)) != list(map(int, ref["train_idx"])):
+            msgs.append(f"fold {i}: train_idx mismatch")
+        if list(map(int, va)) != list(map(int, ref["val_idx"])):
+            msgs.append(f"fold {i}: val_idx mismatch")
+    return (len(msgs) == 0), msgs
+
+
 def report_distribution(
     df: pd.DataFrame, folds: list[tuple[np.ndarray, np.ndarray]], fields: Sequence[str]
 ) -> dict:

@@ -21,8 +21,23 @@ data:
 split:
   type: stratified_kfold
   n_splits: 5
+  # NOTE (Phase 1 reproducibility hardening, 2026-05-21):
+  #   Stratification key intentionally covers only T1 (promise_status) + T3
+  #   (evidence_status). T2 (verification_timeline) and T4 (evidence_quality)
+  #   are NOT in the key because the official 1,000-row training set has
+  #   support=13 for T2 'within_2_years' and support=1 for T4 'Misleading',
+  #   which cannot be evenly distributed across 5 folds anyway. Changing this
+  #   key invalidates every committed OOF/ckpt and the AP-D4 = 0.71608 result;
+  #   any future stratification upgrade MUST be paired with a full retrain of
+  #   the active stack and a Phase >= 40 ablation. See MASTER_PLAN §20.3 and
+  #   data/processed/folds/seed42.json (canonical fold snapshot).
   stratify_fields: [promise_status, evidence_status]
   shuffle: true
+  # Canonical fold snapshot for the current stratify config (committed for
+  # Phase 1 reproducibility). Train scripts continue to regenerate folds via
+  # sklearn StratifiedKFold(seed=42); ``verify_canonical_folds`` cross-checks
+  # the regenerated assignments against this file as a tripwire.
+  canonical_folds_seed42: data/processed/folds/seed42.json
 
 model:
   backbone: hfl/chinese-macbert-base

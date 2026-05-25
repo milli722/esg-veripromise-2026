@@ -6,7 +6,7 @@
 >
 > **作者**：Eric Chen\*Copilot
 >
-> **➜ 想直接複現 SOTA？請看 [REPRODUCE.md](REPRODUCE.md)，從 clone 到 0.71608 的一站式說明書。**
+> **想直接複現 SOTA？請看 [REPRODUCE.md](REPRODUCE.md)，從 clone 到 0.71608 的一站式說明書。**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![PyTorch 2.2+](https://img.shields.io/badge/pytorch-2.2%2B-ee4c2c)](https://pytorch.org/)
@@ -78,7 +78,7 @@ Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 | **Phase 38** | + Ollama qwen2.5:7b-instruct 本機 LLM 合成 （stem #8）→ **8-way × 3-view（AP-D4）** | **0.71608** |
 | Phase 39 | AP-D5 grid 0.05 細粒度權重搜索可行性評估（單機 Stage A 單輪 ≈3h，列為負面消融；SOTA 維持 AP-D4） | 0.71608（unchanged） |
 
-完整實驗紀錄見 [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md)。
+完整實驗紀錄見 [MASTER_PLAN_AND_PROGRESS.md](MASTER_PLAN_AND_PROGRESS.md)。
 
 ---
 
@@ -86,8 +86,8 @@ Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 
 ```
 esg-veripromise-2026/
-├── SOTA_Reproduction_Phase36.ipynb    # ★ 主要交付：SOTA 重現手冊（17 章）
-├── MASTER_PLAN_AND_PROGRESS_20260518.md  # 完整研究日誌（Phase 1~37）
+├── SOTA_Reproduction_Phase36.ipynb    # 互動式重現手冊（檔名保留歷史 Phase 36，內容已延伸至 Phase 38）
+├── MASTER_PLAN_AND_PROGRESS.md        # 完整研究決策總控（Phase 1~39）
 ├── ESG_永續承諾驗證競賽_2026.md         # 競賽規則
 ├── README.md
 ├── requirements.txt
@@ -97,14 +97,16 @@ esg-veripromise-2026/
 ├── vpesg4k_train_1000 V1.json
 ├── [External]_VeriPromiseESG_..._Baseline_Code_ZH.ipynb  # 官方 baseline
 │
-├── configs/                # 6 個 SOTA stem 的 YAML 配方
+├── configs/                # 8 個 AP-D4 SOTA stem 的 YAML 配方
 │   ├── base.yaml
 │   ├── exp_p2_combo_best.yaml
 │   ├── exp_p2_combo_best_u10_pseudo.yaml
 │   ├── exp_p2_combo_best_u10_pseudo_v2.yaml
 │   ├── exp_p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3.yaml
 │   ├── exp_p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3.yaml
-│   └── exp_p2_combo_best_classw_focal_u6pro.yaml
+│   ├── exp_p2_combo_best_classw_focal_u6pro.yaml
+│   ├── exp_p2_combo_best_aug_plus.yaml
+│   └── exp_p2_combo_best_aug_plus_v2.yaml
 │
 ├── src/                    # 框架原始碼
 │   ├── seed.py             # 全域種子
@@ -233,30 +235,32 @@ python scripts\u6_backtranslate_pro.py
 > 上述步驟涉及外部網站結構與 PDF 解析版本依賴，**byte-exact 重現可能漂移 ±0.003**。
 > 若僅需重現官方資料 baseline 而不在意 U10/U6 增強，請跳過 5.1.2 / 5.1.3。
 
-### 5.2 訓練 6 個 SOTA stem
+### 5.2 訓練 8 個 AP-D4 stem
 
 ```powershell
-# 預估 30~40 GPU 小時 / RTX 4060 8GB；單 fold 約 3~5 分鐘
+# 預估 7~8 GPU 小時 / RTX 5060 Laptop 8GB；單 fold 約 5~7 分鐘
 python -m src.train_kfold        --config configs\exp_p2_combo_best.yaml
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_u10_pseudo.yaml
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_u10_pseudo_v2.yaml
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3.yaml
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3.yaml
 python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_classw_focal_u6pro.yaml
+python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_aug_plus.yaml
+python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_aug_plus_v2.yaml
 ```
 
 每個 stem 會在 `outputs/checkpoints/{stem}/seed{S}/fold{F}/` 寫入 `best.pt` 與 `oof_probs.npz`。
 
 ### 5.3 集成與重現分數
 
-開啟 [`SOTA_Reproduction_Phase36.ipynb`](SOTA_Reproduction_Phase36.ipynb) 並設定 `MODE = "load_oof"`，依序執行所有 cell。最末 cell 將輸出：
+建議直接依 [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071608) 執行 AP-D4 8-way × 3-view ensemble。預期輸出：
 
 ```
-[Phase 36 重現] weighted_score = 0.71018
-  promise_status         F1 = 0.94210
-  verification_timeline  F1 = 0.62778
-  evidence_status        F1 = 0.87774
-  evidence_quality       F1 = 0.46934
+[u10-tta FINAL] 0.7160840624
+  promise_status         F1 = 0.94387
+  verification_timeline  F1 = 0.63150
+  evidence_status        F1 = 0.88011
+  evidence_quality       F1 = 0.48157
 ```
 
 實際數字會因 cuDNN 非決定性、torch 浮點累加在 ±0.0005 內漂移。
@@ -265,7 +269,7 @@ python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_classw_focal
 
 ## 6. 方法概要
 
-詳細推導與消融實驗見 [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md) §10、§47–§55。
+詳細推導與消融實驗見 [MASTER_PLAN_AND_PROGRESS.md](MASTER_PLAN_AND_PROGRESS.md) §4–§18、§47–§56。
 
 ### 6.1 模型
 
@@ -297,7 +301,7 @@ python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_classw_focal
   - `scripts/u13_llm_judge.py`：LLM-as-judge 對既有 U10 偽標籤重新打分（`llm_judge_score` ∈ [0,1]）。
   - 設定檔：`configs/exp_p2_combo_best_classw_focal_u13_synth.yaml`（繼承 Phase 36 最佳配方 + U13 合成資料）。
   - 測試：`tests/test_u13_synth.py` 12 個測試全綠。
-  - **詳見 [MASTER_PLAN §56](MASTER_PLAN_AND_PROGRESS_20260502.md#第-56-章-｜-phase-37合法資料擴增llm-合成--人工標註--llm-評審)**。
+  - **詳見 [MASTER_PLAN §54](MASTER_PLAN_AND_PROGRESS.md#54-phase-37-並行路線--u13llm-合成--人工標註--llm-評審規劃中llm-合成已於-55-落地)**。
 
 ### 6.4 集成（Phase 36 核心）
 
@@ -350,7 +354,7 @@ python scripts/ap_llm_synth.py promote --gated-csv data/aug_plus/aug_gated.csv -
 # → 訓練：python src/train_pseudo_kfold.py --config configs/exp_p2_combo_best_aug_plus.yaml
 ```
 
-**狀態：Phase 37 G3 smoke + G4 5-fold 全訓練皆已完成**（seed=42 × 5 folds · 約 53 min 於 RTX 5060 Laptop）。Single-stem OOF = **0.66966**（vs Phase 36 stem #6 baseline 0.67044，**Δ = −0.00078**），落在 U12 OOF noise budget ±0.0045 內，未升單 stem SOTA；其中 **T4 +0.00483 與設計意圖一致**，T2 因 47 列種子以 within_2y 為主造成 −0.02105 regression。下一步：將此 stem 加入 7-way per-task hillclimb 驗證 + 重配 AP 種子比例。詳 [MASTER_PLAN §53](MASTER_PLAN_AND_PROGRESS_20260518.md#53-phase-37-aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18)。
+**狀態：Phase 37 G3 smoke + G4 5-fold 全訓練皆已完成**（seed=42 × 5 folds · 約 53 min 於 RTX 5060 Laptop）。Single-stem OOF = **0.66966**（vs Phase 36 stem #6 baseline 0.67044，**Δ = −0.00078**），落在 U12 OOF noise budget ±0.0045 內，未升單 stem SOTA；其中 **T4 +0.00483 與設計意圖一致**，T2 因 47 列種子以 within_2y 為主造成 −0.02105 regression。後續已在 AP-D3 7-way × 3-view ensemble 證明 diversity 價值（0.71364），並由 AP-D4 stem #8 推進至 0.71608。詳 [MASTER_PLAN §53](MASTER_PLAN_AND_PROGRESS.md#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18)。
 
 ---
 
@@ -359,7 +363,7 @@ python scripts/ap_llm_synth.py promote --gated-csv data/aug_plus/aug_gated.csv -
 | 文件 | 內容 |
 | :-- | :-- |
 | [`SOTA_Reproduction_Phase36.ipynb`](SOTA_Reproduction_Phase36.ipynb) | 17 章可執行重現手冊；首選入口 |
-| [`MASTER_PLAN_AND_PROGRESS_20260518.md`](MASTER_PLAN_AND_PROGRESS_20260518.md) | 從 Phase 1 到 Phase 37 的完整研究日誌（含 Aug-Plus AP1~AP5 模組與訓練 ablation） |
+| [MASTER_PLAN_AND_PROGRESS.md](MASTER_PLAN_AND_PROGRESS.md) | 從 Phase 1 到 Phase 39 的完整研究決策總控（含 AP-D4 與 Phase 39 負面消融） |
 | [`ESG_永續承諾驗證競賽_2026.md`](ESG_永續承諾驗證競賽_2026.md) | 競賽官方規則 |
 | [`[External]_VeriPromiseESG_..._Baseline_Code_ZH.ipynb`](%5BExternal%5D_VeriPromiseESG_2026_ESG_Promise_Verification_Competition_Baseline_Code_ZH.ipynb) | 主辦單位提供的 baseline notebook |
 | [`docs/archive/`](docs/archive/) | 早期計畫文件存檔 |

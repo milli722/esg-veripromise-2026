@@ -1,808 +1,595 @@
-<!-- markdownlint-disable MD025 MD032 MD060 MD022 MD058 MD031 MD040 MD036 MD029 MD012 MD033 -->
+<!-- markdownlint-disable MD025 MD032 MD033 MD036 MD040 MD058 MD060 -->
 
 # VeriPromise ESG 2026 — 主規劃與進度紀錄
 
-> **文件版本** v4.2 / **整理日期** 2026-05-18
+> 文件版本：v5.0
+> 最後整理：2026-05-25
+> 語系：繁體中文
+> 作者：Eric Chen*Copilot
 
-<!-- restructure-v2 applied --> / **語系** 繁體中文 / **作者** Eric Chen\*Copilot
->
-> 本檔為**單一真相來源（single source of truth）**。所有訓練決策、實驗結果、待辦項目皆以本檔為準。
+本文件是 VeriPromise ESG 2026 專案的研究決策總控與完整進度紀錄。它的任務不是取代 [README.md](README.md) 的入口摘要，也不是取代 [REPRODUCE.md](REPRODUCE.md) 的逐步重現 SOP；本文件負責保存「為什麼這樣做、做過什麼、結果如何、下一步是否值得做」的完整證據鏈。
 
-### 如何閱讀本文件（30 秒導覽）
+本次重構原則：
 
-1. **想看現況**：上方指標表 + [§1 Snapshot](#1-一頁總結snapshot)。
-2. **想看最新實驗**：[§53 Phase 37 Aug-Plus](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) · [§55 Phase 38 AP-D4 NEW SOTA 0.71608](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) · [§56 Phase 39 AP-D5 可行性評估（負面消融）](#56-phase-39--ap-d5-細粒度權重搜索可行性評估compute-infeasiblesota-維持-0716082026-05-21)。
-3. **想看 SOTA 是怎麼來的**：[§52 Phase 36](#52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018)（0.71018）→ [§53.12 AP-D3](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18)（0.71364）→ [§55 AP-D4](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20)（0.71608, 現行 SOTA）。
-4. **想看接下來該做什麼**：[§8 待辦事項（ROI 排序）](#8-待辦事項roi-排序)。
-5. **想看為什麼某條路放棄**：[§6 已驗證為負方向](#6-已驗證為負方向x1--x13-禁區)。
-6. **想看官方規則對外部資料的立場**：[§59](#59-競賽規則對外部資料的立場已確認可用)（含 2026-05-17 主辦方裁示摘要）。
+1. 保留既有專業內容與 Phase log，不刪除可追溯的實驗證據。
+2. 修正首頁、SOTA 數字、待辦事項與文件互連的版本漂移。
+3. 將主文件重新整理為「決策總控、方法規格、進度儀表板、完整 Phase log」四層。
+4. 明確區分目前採納路線、歷史失敗路線、暫緩路線與待校準路線。
+5. 全文不使用 emoji；狀態以文字、表格與明確決策表達。
 
-| 指標 | 數值 |
+---
+
+<a id="document-purpose"></a>
+## 1. 文件定位與閱讀方式
+
+### 1.1 本文件用途
+
+| 文件 | 職責 | 何時閱讀 |
+| :-- | :-- | :-- |
+| [README.md](README.md) | 專案入口、方法速覽、使用者導覽 | 第一次進 repo、需要快速理解成果 |
+| [REPRODUCE.md](REPRODUCE.md) | 從 clone 到 AP-D4 0.71608 的可執行 SOP | 要重訓、重跑 ensemble、驗證 SOTA |
+| [MASTER_PLAN_AND_PROGRESS.md](MASTER_PLAN_AND_PROGRESS.md) | 單一研究真相來源：決策、實驗、失敗教訓、待辦 | 要判斷下一步、回溯實驗原因、避免重複踩坑 |
+| [ESG_永續承諾驗證競賽_2026.md](ESG_永續承諾驗證競賽_2026.md) | 競賽規格與官方規則摘要 | 要確認任務定義、提交格式、外部資料限制 |
+| [SOTA_Reproduction_Phase36.ipynb](SOTA_Reproduction_Phase36.ipynb) | 互動式研究筆記本，保留舊 Phase 36 名稱但內容已延伸到 Phase 38 | 要以 Notebook 方式逐段檢視流程 |
+
+### 1.2 建議閱讀路徑
+
+| 需求 | 建議章節 |
 | :-- | :-- |
-| **Current SOTA**                          | **0.71364**（Phase 37 AP-D3 — 7-way × 3-view per-task TTA，[§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18)） |
-| **舊 SOTA**                               | 0.71018（Phase 36 — U6-pro back-translation + 6-way × 3-view per-task TTA） |
-| **保守工程上限**                          | 0.7236（距離 −0.0134） |
-| **寬鬆工程上限**                          | 0.7570（距離 −0.0468） |
-| **賽程截止**                              | 2026-06-17 22:00（test 6/10 釋出 → 21 次提交額度） |
-| **驗證集釋出**                            | 2026-06-03（valid 校準先決條件）|
-| **訓練集規模**                            | 1,000 筆 / 50 家 TWSE 上市公司（FY2022~2024）|
-| **硬體**                                  | RTX 5060 Laptop 8 GB CUDA |
+| 想知道目前最強結果 | [§2 現況快照](#current-status)、[§5 SOTA 軌跡](#sota-scoreboard) |
+| 想重現 0.71608 | [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071608)、[§8 現行 AP-D4 管線](#current-pipeline) |
+| 想判斷下一步做什麼 | [§14 待辦與 ROI](#roadmap)、[§13 上限與殘留風險](#risk-and-limits) |
+| 想避免重跑失敗方向 | [§12 負面結果與禁區](#negative-results)、[§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試) |
+| 想看完整實驗證據 | [Part IV 完整 Phase Log](#part-iv--完整-phase-log-append-only-evidence) |
+| 想確認外部資料是否合法 | [§18 規則與治理](#governance)、[§59](#59-競賽規則對外部資料的立場已確認可用) |
+
+### 1.3 維護規則
+
+1. 新實驗先寫入對應 Phase 章節，再回填首頁快照與 SOTA 表。
+2. 任何分數必須標明 OOF、valid、test 或 LB 來源；不得混用。
+3. 任何被拒絕的方向要進入 X 系列或暫緩清單，避免日後重複浪費算力。
+4. 對外部資料、LLM 合成、人工標註的使用必須記錄來源、產生方式、資料隔離與合法性依據。
+5. 若 README 或 REPRODUCE 有 SOTA 數字更新，本文件也必須同步更新。
 
 ---
 
-## 文件導覽（Table of Contents）
+<a id="current-status"></a>
+## 2. 現況快照
 
-### Part I — 執行摘要 (Executive Summary)
-- [§1. 一頁總結（Snapshot）](#1-一頁總結snapshot)
-- [§2. 競賽規格](#2-競賽規格)
-- [§3. 整體策略與雙軌 SOTA 軌跡](#3-整體策略與雙軌-sota-軌跡)
+截至 2026-05-25，本專案採納的研究狀態如下。
 
-### Part II — 進度全景 (Progress Dashboard)
-- [§4. SOTA 軌跡總表](#4-sota-軌跡總表)
-- [§5. 已完成項目索引（含主要 D1~D30）](#5-已完成項目索引含主要-d1d30)
-- [§6. 已驗證為負方向（X1 ~ X13 禁區）](#6-已驗證為負方向x1--x13-禁區)
-- [§7. 結構性殘留與工程上限](#7-結構性殘留與工程上限)
-- [§8. 待辦事項（ROI 排序）](#8-待辦事項roi-排序)
+| 指標 | 目前值 |
+| :-- | :-- |
+| Current SOTA | 0.71608，Phase 38 AP-D4，8-way × 3-view per-task TTA，seed42 OOF |
+| 上一代 SOTA | 0.71364，Phase 37 AP-D3，7-way × 3-view per-task TTA |
+| 最近完成 Phase | Phase 39，AP-D5 fine grid 可行性評估；因 compute-infeasible 未採納，SOTA 維持 0.71608 |
+| 主要 pipeline | 8 stems × seed42 × 5-fold OOF probabilities × stored/middle/tail 三視角 × per-task simplex hillclimb × hierarchical constraints |
+| 主要瓶頸 | T4 evidence_quality macro-F1，尤其 Misleading；T2 verification_timeline 少數類仍需 valid 校準 |
+| 早期保守目標（Phase 18 估計） | 0.7236，距目前 0.71608 約 +0.00752 |
+| 早期寬鬆上限（Phase 18 估計） | 0.7570，距目前 0.71608 約 +0.04092 |
+| 官方 valid 釋出 | 2026-06-03，需用於 OOF drift 與 submission anchor 校準 |
+| 官方 test 釋出 | 2026-06-10，至 2026-06-17 22:00 截止 |
+| 訓練集 | 1,000 筆，50 家 TWSE 上市公司，FY2022-FY2024 |
+| 本機硬體 | RTX 5060 Laptop 8 GB CUDA，Windows + PowerShell 5.1 |
+| Python 注意事項 | 實作紀錄曾使用系統 Python 3.13；`.venv` 可能缺 numpy，訓練前需重新確認環境 |
 
-### Part III — 技術設計 (Technical Design)
-- [§9. 規劃哲學](#9-規劃哲學)
-- [§10. 競賽任務形式化](#10-競賽任務形式化)
-- [§11. 資料初步剖析 (基於 `vpesg4k_train_1000 V1.csv`)](#11-資料初步剖析-基於-vpesg4k_train_1000-v1csv)
-- [§12. 整體技術架構](#12-整體技術架構)
-- [§13. 完整里程碑路線圖 (Phased Roadmap)](#13-完整里程碑路線圖-phased-roadmap)
-- [§14. 企業級專案骨架 (Step 0 產出)](#14-企業級專案骨架-step-0-產出)
-- [§15. 推論與後處理 SOP](#15-推論與後處理-sop)
-- [§16. 風險與止損機制](#16-風險與止損機制)
-- [§17. 交付物 (Deliverables)](#17-交付物-deliverables)
-- [§18. 排程](#18-排程)
+### 2.1 AP-D4 分數表
 
-### Part IV — Phase 詳細紀錄 (Append-only Phase Log)
-- [§19. Phase 1 — 主力配置（Baseline 復現設定）](#19-phase-1--主力配置baseline-復現設定)
-- [§20. Phase 1 結果與 Phase 2 籌備（OOF 0.6415 → combo 規劃）](#20-phase-1-結果與-phase-2-籌備oof-06415--combo-規劃)
-- [§21. Phase 2~4 超參數搜索藍圖](#21-phase-24-超參數搜索藍圖)
-- [§22. Phase 2 — Combo Winners 最終配置 (3 seeds × 5 folds)](#22-條件式約束極重要)
-- [§23. Phase 3 — 升規模 (`hfl/chinese-macbert-large`, 326M)](#23-資料)
-- [§24. Phase 4 — Probability Ensemble (base combo + large)](#24-硬體與環境)
-- [§25. Phase 5 — Wave A/B Ablation + Combo v2 + Per-task Hillclimb](#25-評分管線)
-- [§26. Phase 6 — Wave C Ablation + 7-way Per-task Hillclimb](#26-phase-6--wave-c-ablation--7-way-per-task-hillclimb)
-- [§27. Phase 7 — Combo v3 + 8-way Per-task Hillclimb](#27-phase-7--combo-v3--8-way-per-task-hillclimb)
-- [§28. Phase 8 — combo_v3 Multi-seed 拆分為 9-way 池（Phase 8 SOTA，已被 Phase 11 取代）](#28-phase-8--combo_v3-multi-seed-拆分為-9-way-池phase-8-sota已被-phase-11-取代)
-- [§29. Phase 9 — Sprint A backbone 擴 pool（已完成）](#29-phase-9--sprint-a-backbone-擴-pool已完成)
-- [§30. Phase 10 — Sprint B / T6 時間 token 增強（已完成）](#30-phase-10--sprint-b--t6-時間-token-增強已完成)
-- [§31. Phase 11 — Sprint B / T6 v2 專屬 bucket token（已完成）](#31-設計哲學三句話)
-- [§32. Phase 12 — Sprint B / T7 Focal-T4 γ=3.0 變體（已完成）](#32-雙軌-sota-軌跡)
-- [§33. Phase 13 — Sprint B 收尾批次：U2 EMA-995 + U4 LS(T1/T3) + U7 聯合 hillclimb（已完成，**新 SOTA 0.68770**）](#33-三條主軸總覽)
-- [§34. Phase 14 — Sprint C 結構性多樣化 N1：macbert-large + Focal-T4 + FGM (p10) + Joint Hillclimb v12（已完成，**新 SOTA 0.68825**）](#34-不再進攻的方向已驗證為負詳-1919-phase-1--主力配置baseline-復現設定--13946-phase-25-完成--u6--b4-nllb-600m-中英中-回譯資料增強2026-05-05)
-- [§35. Phase 15 (Reset) — U10 暫緩並清除外部 pseudo 線（2026-05-04）](#35-phase-15-reset--u10-暫緩並清除外部-pseudo-線2026-05-04)
-- [§36. Phase 15 (Implementation) — U1 TTA 推論擴增（2026-05-04）](#36-phase-15-implementation--u1-tta-推論擴增2026-05-04)
-- [§37. Phase 16 完成 — N2/p11 ELECTRA base 官方資料結構性成員（2026-05-04）](#37-phase-16-完成--n2p11-electra-base-官方資料結構性成員2026-05-04)
-- [§38. Phase 17 完成 — U1-b TTA 三視角補測（2026-05-05）](#38-phase-17-完成--u1-b-tta-三視角補測2026-05-05)
-- [§39. Phase 18 完成 — U1-c 任務別/視角別加權 TTA（2026-05-05）](#39-phase-18-完成--u1-c-任務別視角別加權-tta2026-05-05)
-- [§40. Phase 19：U11 GroupKFold sanity（read-only 診斷，2026-05-05）](#40-phase-19u11-groupkfold-sanityread-only-診斷2026-05-05)
-- [§41. Phase 20：U12 OOF cross-fold variance（read-only 診斷，2026-05-05）](#41-競賽-active-軌跡tta-path)
-- [§42. Phase 21：U3 SWA — `p2_combo_best_swa` 設置與訓練（2026-05-05）](#42-u10-弱監督軌跡bestpt-path)
-- [§43. Phase 22：U5 T4 class-balanced re-sampling — 設置（2026-05-05）](#43-仍在-active-v12-pool-的成員17-員)
-- [§44. Phase 23：N3 NeZha-base 設置（2026-05-05）](#44-phase-23n3-nezha-base-設置2026-05-05)
-- [§45. Phase 24：U2 EMA + warm-start 設置與訓練（2026-05-05）](#45-phase-24u2-ema--warm-start-設置與訓練2026-05-05)
-- [§46. Phase 25 完成 — U6 / B4 NLLB-600M 中→英→中 回譯資料增強（2026-05-05）](#46-phase-25-完成--u6--b4-nllb-600m-中英中-回譯資料增強2026-05-05)
-- [§47. U10 — 企業永續報告書 (SR) 弱監督 pipeline 完整版（2026-05-09 重啟，2026-05-10 v2 重訓）](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓)
-- [§48. Phase 32 — U10 per-task TTA — 0.68632（U10 stack 0.67746 → +0.00886）](#48-phase-32--u10-per-task-tta--068632u10-stack-067746--000886)
-- [§49. Phase 33 — Class-weighted CE + Focal-T4 γ=3.0 + 4-way per-task hillclimb — NEW SOTA 0.70185](#49-phase-33--class-weighted-ce--focal-t4-γ30--4-way-per-task-hillclimb--new-sota-070185)
-- [§50. Phase 34 — M3-v3 + M4-v3 + stem #5（classw_focal v3）+ 5-way per-task hillclimb — NEW SOTA 0.70569](#50-phase-34--m3-v3--m4-v3--stem-5classw_focal-v3-5-way-per-task-hillclimb--new-sota-070569)
-- [§51. Phase 35 — 5-way × 3-view per-task TTA — NEW SOTA 0.70758](#51-工程動作分類d1--d30)
-- [§52. Phase 36 — U6-pro back-translation + stem #6 + 6-way × 3-view TTA — NEW SOTA 0.71018](#52-u1--u12-backlog-完成狀態)
-- [§53. Phase 37 — Aug-Plus hand-crafted minority 訓練與 single-stem ablation（2026-05-18）· §53.12 AP-D3 0.71364](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18)
-- [§54. Phase 37 並行路線 — U13：LLM 合成 + 人工標註 + LLM 評審（規劃中／LLM-合成已於 §55 落地）](#54-phase-37-並行路線--u13llm-合成--人工標註--llm-評審規劃中llm-合成已於-55-落地)
-- [§55. Phase 38 — Ollama LLM-synth + stem #8 + AP-D4 → **NEW SOTA 0.71608**（2026-05-20）](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20)
-- [§56. Phase 39 — AP-D5 細粒度權重搜索可行性評估（compute-infeasible；SOTA 維持 0.71608）（2026-05-21）](#56-phase-39--ap-d5-細粒度權重搜索可行性評估compute-infeasiblesota-維持-0716082026-05-21)
+| 指標 | AP-D4 current SOTA | AP-D3 | Phase 36 |
+| :-- | --: | --: | --: |
+| Weighted score | 0.71608 | 0.71364 | 0.71018 |
+| T1 promise_status F1(Yes) | 0.94387 | 0.94337 | 0.94210 |
+| T2 verification_timeline macro-F1 | 0.63150 | 0.63061 | 0.62778 |
+| T3 evidence_status F1(Yes) | 0.88011 | 0.88045 | 0.87774 |
+| T4 evidence_quality macro-F1 | 0.48157 | 0.47496 | 0.46934 |
 
-### Part V — 附錄 (Appendix)
-- [§57. Backlog 詳表（D1 ~ D30 + U1 ~ U12 全紀錄）](#57-backlog-詳表d1--d30--u1--u12-全紀錄)
-- [§58. 工程上限拆解（推導依據）](#58-工程上限拆解推導依據)
-- [§59. 競賽規則對外部資料的立場（已確認可用）](#59-競賽規則對外部資料的立場已確認可用)
-
-═══════════════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
-# Part I — 執行摘要 (Executive Summary)
-
-本部分為決策摘要：3 分鐘看完目前狀態、競賽規格、整體策略。所有量化結論皆有對應 Part IV Phase 紀錄背書。
-
-═══════════════════════════════════════════════════════════════════════════════
-
-## 1. 一頁總結（Snapshot）
-
-截至 2026-05-12，本專案 SOTA 軌跡如下（**Phase 36 6-way × 3-view u6pro 反超 0.71018，首度跨越 0.71**）：
-
-| 軌跡 | 路徑 | 最佳分數 | 達成日期 | 對應章節 |
-|---|---|---:|---|---|
-| ** 全競賽 SOTA（Phase 36）** | U10 6-way per-task stem hillclimb × 3-view (stored/middle/tail) per-task α 搜尋；新加入 stem #6 = `p2_combo_best_classw_focal_u6pro`（U6-pro 防幻覺回譯 434 augmented samples） | **0.71018** | 2026-05-10 | [§52](#52-u1--u12-backlog-完成狀態) |
-| Phase 35 5-way × 3-view TTA | U10 5-way per-task stem hillclimb × 3-view (stored/middle/tail) per-task α 搜尋（K-D simplex grid 0.1） | 0.70758 | 2026-05-12 | [§50 / §51](#50-phase-34--m3-v3--m4-v3--stem-5classw_focal-v3-5-way-per-task-hillclimb--new-sota-070569) |
-| Phase 34 5-way per-task hillclimb | baseline + v1 + v2 + v2_classw_focal + v3_classw_focal 5-way per-task hillclimb（grid 0.1） | 0.70569 | 2026-05-12 | [§50 / §51](#50-phase-34--m3-v3--m4-v3--stem-5classw_focal-v3-5-way-per-task-hillclimb--new-sota-070569) |
-| Phase 33 4-way per-task hillclimb | baseline + v1 + v2 + v2_classw_focal 4-way per-task hillclimb（grid 0.05 simplex） | 0.70185 | 2026-05-12 | [§49](#49-phase-33--class-weighted-ce--focal-t4-γ30--4-way-per-task-hillclimb--new-sota-070185) |
-| 競賽 active SOTA（Phase 18） | U1-c per-task / per-view 加權 TTA（17-way pool × 3 視角，零再訓） | 0.68925 | 2026-05-05 | [§39](#39-phase-18-完成--u1-c-任務別視角別加權-tta2026-05-05) |
-| U10 + per-task TTA（Phase 32） | U10 45 ckpt × 3 stems × 3 views per-task per-view aggregator | 0.68632 | 2026-05-12 | [§48](#48-phase-32--u10-per-task-tta--068632u10-stack-067746--000886) |
-| U10 4-way equal-weight（Phase 33 ref） | baseline + v1 + v2 + classw_focal_t4_g3 等權 ensemble（無 hillclimb） | 0.67922 | 2026-05-12 | [§49](#49-phase-33--class-weighted-ce--focal-t4-γ30--4-way-per-task-hillclimb--new-sota-070185) |
-| U10 best.pt path（Phase 31） | U10 baseline + v1 + v2 三方 best.pt OOF stack（45 ckpt） | 0.67746 | 2026-05-10 | [§47.7](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓) |
-
-**Phase 35 達成 0.70758**（+0.01833 vs active 0.68925，+0.00573 vs Phase 33 0.70185，+0.00189 vs Phase 34 0.70569）；新加入的 v3 stem（M3-v3 9657 段語料 + classw_focal）在 5-way per-task 結構中拿走 T2 主要權重（v2_classw_focal=0.5、v3_classw_focal=0.4），verification_timeline 從 0.60157 拉升至 **0.62669**（+0.02512）。 仍為 OOF 結果，待 6/03 valid 校準（保守 0.69~0.71）。
-
-距離保守工程上限 0.7236：**−0.0160**；距離寬鬆工程上限 0.7570：−0.0494。
+AP-D4 相對 AP-D3 的 apples-to-apples 增益為 +0.00244，主要來自 T4 +0.00661；T3 有輕微回落，但被 T1/T2/T4 增益抵銷。
 
 ---
 
-## 2. 競賽規格
+<a id="document-map"></a>
+## 3. 文件與產物地圖
 
-### 2.1 任務
+### 3.1 文件分工
 
-對每段 ESG 報告書文本，同時預測四個欄位：
+| 路徑 | 狀態 | 說明 |
+| :-- | :-- | :-- |
+| [README.md](README.md) | 對外入口 | 應維持短而準，引用本文件作完整研究日誌 |
+| [REPRODUCE.md](REPRODUCE.md) | 主要重現手冊 | AP-D4 0.71608 的指令來源；訓練、資料、集成命令以此為準 |
+| [MASTER_PLAN_AND_PROGRESS.md](MASTER_PLAN_AND_PROGRESS.md) | 研究總控 | 所有決策、SOTA 軌跡、失敗教訓與未來路線以此為準 |
+| [docs/archive/TRAINING_PLAN_FRESH_20260428.md](docs/archive/TRAINING_PLAN_FRESH_20260428.md) | 歷史存檔 | 早期訓練計畫，僅作背景，不作現行 SOP |
+| [docs/archive/PROGRESS_REVIEW_20260501.md](docs/archive/PROGRESS_REVIEW_20260501.md) | 歷史存檔 | Phase 13 前後進度回顧，已被本文件吸收 |
 
-| 子任務 | 名稱 | 類別數 | 評分指標 | 權重 |
-| :--: | :-- | :--: | :-- | :--: |
-| **T1** | promise_status | 2 | F1 (positive=Yes) | **0.20** |
-| **T2** | verification_timeline | 5 | Macro-F1 | **0.15** |
-| **T3** | evidence_status | 3 | F1 (positive=Yes) | **0.30** |
-| **T4** | evidence_quality | 4 | Macro-F1 | **0.35** |
+### 3.2 核心程式與資料產物
 
-最終分數 $\mathcal{S} = 0.20 \cdot \mathrm{T1} + 0.15 \cdot \mathrm{T2} + 0.30 \cdot \mathrm{T3} + 0.35 \cdot \mathrm{T4}$。
-
-### 2.2 條件式約束（極重要）
-
-- **T1=No → T2 / T3 / T4 全部必須 = N/A**（且 promise_string、evidence_string 必須為空字串）。
-- **T3=No → T4 必須 = N/A**（且 evidence_string 為空字串）。
-
-推論時必須以 `apply_constraints_batch` 強制覆寫，否則 T2 / T4 macro-F1 會被無效預測污染。Phase 12 / 13 / 14 三次關鍵判斷（v10 失敗、v11 成功、v12 增益）皆源自此約束。
-
-### 2.3 資料
-
-- 訓練集 1,000 筆（涵蓋 50 家 TWSE 上市公司，已釋出，名單見 [§47.2](#472-已標註-50-家公司禁止重複爬取標註)）
-- 驗證集：2026-06-03 釋出
-- 測試集：2026-06-10 釋出，6/17 截止上傳
-- 每日提交上限 3 次
-
-### 2.4 硬體與環境
-
-- 單卡 RTX 5060 Laptop **8 GB** CUDA
-- Windows + PowerShell 5.1 + Python 3.13.7 + torch 2.11.0+cu128 + transformers 5.6.2
-- 必用系統 Python：`C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe`（`f:\esg-veripromise-2026\.venv` 缺 numpy）
-
-### 2.5 評分管線
-
-5-Fold StratifiedKFold（依 promise_status + evidence_status 分層）→ AdamW + cosine LR + 10% warmup → AMP fp16 → 5 epochs → early_stop_patience = 2 → 每 fold 存 OOF float16 機率 → ensemble 階段做 per-task 或 joint hillclimb。
+| 類別 | 主要位置 | 角色 |
+| :-- | :-- | :-- |
+| 訓練入口 | `src/train_kfold.py`、`src/train_pseudo_kfold.py` | 官方資料與 pseudo/augmented two-stage 訓練 |
+| 集成工具 | `src/tools/u10_per_task_tta.py` | AP-D3/AP-D4 的 stem/view per-task hillclimb |
+| 後處理 | `src/inference/post_process.py` | T1/T3 條件式約束覆寫 |
+| 評分 | `src/eval/metrics.py` | 4 任務 F1 與 weighted score |
+| 設定檔 | `configs/exp_p2_combo_best*.yaml` | 8 個 SOTA stem 的配方來源 |
+| Aug-Plus | `assets/aug_plus/`、`data/aug_plus/`、`scripts/ap_*.py` | 手工與 LLM 合成少數類擴增 |
+| U10/U6-pro 資料 | `data/processed/u10/`、`data/processed/u6_pro/` | 弱監督與回譯擴增中介產物 |
+| Ensemble 報告 | `reports/analysis/_ensemble/` | OOF 預測、summary、meta、submission 範本 |
 
 ---
 
-## 3. 整體策略與雙軌 SOTA 軌跡
-
-### 3.1 設計哲學（三句話）
-
-1. **同源異構 ensemble**：以 macbert-base 為主力、macbert-large / roberta-wwm / bert-base 為配角，靠不同初始化、不同訓練技巧（FGM / R-Drop / MSD / Focal）換 diversity；異族 backbone（XLM-R / NeZha / ERNIE）已驗證對純中文 1k 樣本不利（X6 / X11）。
-2. **Per-task 權重 + Per-view TTA**：T1（binary）與 T4（4-class macro）的最佳 ensemble 權重差距極大；改用 per-task hillclimb（[§32](#32-雙軌-sota-軌跡)）+ 3-view 推論（stored / middle / tail）等價於零成本軟 ensemble。
-3. **合規外部資料 + 防幻覺增強**：訓練集 1k 太小 → 採集台灣 31 家公司（不重疊已標註 50 家）62 份 ESG 報告書做弱監督偽標（[§58](#58-工程上限拆解推導依據)），加 NLLB-3.3B + ChrF≥0.5 過濾的回譯（[§142](#142-設定檔-configsbaseyaml-範本)）撐少數類覆蓋。
-
-### 3.2 雙軌 SOTA 軌跡
-
-| 軌跡 | 起點 | 巔峰 | 主要槓桿 |
-| :-- | :--: | :--: | :-- |
-| **Active (TTA path)**          | Phase 1 0.6415  | **Phase 18 0.68925** | per-task hillclimb + U1-c TTA |
-| **U10 (best.pt path)**         | Phase 31 baseline 0.66734 | **Phase 31 stack 0.67746** | 弱監督偽標 + 兩階段隔離訓練 |
-| **雙軌合流 (Phase 32~36)**      | 0.67746 / 0.68925 | **Phase 36 0.71018** | classw_focal + M3-v3 + 5-way × 3-view + U6-pro BT |
-
-### 3.3 三條主軸總覽
-
-```
-┌─ 主軸 A：Ensemble 與 Hillclimb ─────────────────────────────────────────────┐
-│  Phase 4 (2-way)  → Phase 5 (3-way) → … → Phase 14 (17-way joint v12)    │
-│  Phase 33 (4-way per-task) → Phase 34 (5-way) → Phase 36 (6-way × 3-view) │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌─ 主軸 B：TTA 多視角推論（零再訓 free-lunch） ────────────────────────────────┐
-│  Phase 15 (U1 stored+middle)                                              │
-│  Phase 18 (U1-c per-task / per-view α 搜尋)                              │
-│  Phase 35 (5-way × 3-view) → Phase 36 (6-way × 3-view)                   │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌─ 主軸 C：弱監督 + 防幻覺增強（解 plateau） ──────────────────────────────────┐
-│  Phase 31 U10 v1+v2 stack  → Phase 33 classw_focal stem #4               │
-│  Phase 34 M3-v3 stem #5    → Phase 36 U6-pro BT stem #6                   │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 3.4 不再進攻的方向（已驗證為負，詳 [§19](#19-phase-1--主力配置baseline-復現設定) / [§139](#46-phase-25-完成--u6--b4-nllb-600m-中英中-回譯資料增強2026-05-05)）
-
-X1~X13 共 13 條禁區，重點：EMA decay≥0.995 短訓練、xlm-r 主力、NeZha / ERNIE base 同級異族、SWA cosine 末段 LR≠0、global T4 re-sampling、NLLB-600M zh-en-zh BT。本輪嚴格遵守。
-
----
-
-═══════════════════════════════════════════════════════════════════════════════
-
-# Part II — 進度全景 (Progress Dashboard)
-
-本部分為「目前狀態」的精煉表格集合：誰做了什麼、結果如何、還能做什麼。
-所有 Phase 詳細推導與訓練紀錄請翻 Part IV。
-
-═══════════════════════════════════════════════════════════════════════════════
-
-## 4. SOTA 軌跡總表
-
-> 詳細紀錄見後段 [§20 起](#7-結構性殘留與工程上限)。本表只列對 SOTA 有貢獻或關鍵失敗教訓的階段。
-
-### 4.1 競賽 active 軌跡（TTA path）
-
-| Phase | 名稱 | OOF | Δ vs 前任 | 備註 |
-| :--: | :-- | :--: | :--: | :-- |
-| 1 | Baseline 復現（macbert-base + 5-Fold） | 0.6415 | — | 評分管線錨點 |
-| 2 | 單模調優（lr / max_len / pooling / class_weight） | 0.66734 | +0.026 | combo_best 出爐 |
-| 3 | macbert-large 升規模 | 0.66439 | −0.003 | 單模負面（X5）；保留作 ensemble 配角 |
-| 4 | 2-way base+large ensemble | 0.67478 | +0.010 | 首次 ensemble 增益 |
-| 5 | Wave A/B + combo_v2 + 3-way per-task hillclimb | 0.67954 | +0.005 | per-task hillclimb 出爐 |
-| 6 | Wave C + 7-way per-task | 0.68206 | +0.003 | 弱模也能加分 |
-| 7 | combo_v3（R-Drop + MSD）+ 8-way | 0.68394 | +0.002 | base 史上最高單模 0.67121 |
-| 8 | combo_v3 multi-seed 拆 9-way | 0.68440 | +0.0005 | X4 教訓：variance reduction 用「並列」不用「替換」 |
-| 9 | Sprint A roberta-wwm + bert-base 11-way | 0.68558 | +0.001 | xlm-r 拒入池 X6 |
-| 10 | Sprint B / T6 v1 time-token 12-way | 0.68669 | +0.001 | T6 v1 單模 T2 沒進步、ensemble 取 T1/T3 權重 |
-| 11 | Sprint B / T6 v2 bucket-token 13-way | 0.68683 | +0.0001 | T6 路線正式關閉 |
-| 12 | Sprint B / T7 Focal-T4 γ=3 14-way | 0.68660 | −0.00023 | 揭露 constraint coupling |
-| 13 | Joint Hillclimb v11（post-constraint）16-way | 0.68770 | +0.00087 | EMA 二次失敗 X1' |
-| 14 | Sprint C / N1 large+focal+fgm 17-way | 0.68825 | +0.00055 | p10 在 T2 取得權重 1.50 |
-| 15 | U1 TTA `stored+middle` | 0.68879 | +0.00054 | 零再訓增益 |
-| 16 | N2 ELECTRA admission | 0.68825 | 0 | p11 全 0 權重 X7 |
-| 17 | U1-b 三視角等權 | 0.68873 | −0.00006 | 等權路線關閉 X8 |
-| **18** | **U1-c per-task / per-view TTA** | **0.68925** | **+0.00046** | **競賽 active SOTA** |
-| 19 | U11 GroupKFold sanity（read-only） | — | — | 診斷：SK row-leak ≈ 99.93%；valid 釋出後重驗 |
-| 20 | U12 OOF cross-fold variance（read-only） | — | — | 診斷：ensemble noise budget ≈ 0.0045 |
-| 21 | B1 / U3 SWA | 0.66252 | −0.0031 | 拒絕 X9（cosine 末段 LR ≠ 0） |
-| 22 | B2 / U5 T4 re-sampling | 0.66562 | +0.00004 | 拒絕 X10（global sampler 抵銷 T2/T4） |
-| 23 | C1 / N3 NeZha→ERNIE | 0.6086 | — | 拒絕 X11（base-class 異源 backbone 不利） |
-| 24 | B3 / U2 EMA + warm-start | 0.64941 | −0.01617 | 拒絕 X12（EMA 末段 LR + 短訓練） |
-| 25 | B4 / U6 NLLB-600M 回譯 | 0.66321 | −0.00237 | 拒絕 X13（譯本保真度不足） |
-| 32 | U10 per-task TTA（U10 stack + 3-view α） | 0.68632 | +0.00886 vs U10 stack 0.67746 | 兩條軌跡首度相加；詳 [§48](#48-phase-32--u10-per-task-tta--068632u10-stack-067746--000886) |
-| 33 | Class-weighted CE + Focal-T4 γ=3.0 + 4-way hillclimb（stem #4） | 0.70185 | +0.01260 vs active 0.68925 | 首度突破 0.70；詳 [§49](#49-phase-33--class-weighted-ce--focal-t4-γ30--4-way-per-task-hillclimb--new-sota-070185) |
-| 34 | M3-v3 + M4-v3 + stem #5（classw_focal v3）+ 5-way hillclimb | 0.70569 | +0.00384 | M3 corpus 1840→3680；詳 [§50](#50-phase-34--m3-v3--m4-v3--stem-5classw_focal-v3-5-way-per-task-hillclimb--new-sota-070569) |
-| 35 | 5-way × 3-view per-task TTA（stored / mid / tail） | 0.70758 | +0.00189 | 多視角再次 free-lunch；詳 [§51](#51-工程動作分類d1--d30) |
-| **36** | **U6-pro back-translation + stem #6 + 6-way × 3-view TTA** | **0.71018** | **+0.00260** | 舊 SOTA；詳 [§52](#52-u1--u12-backlog-完成狀態) |
-| 37 | Aug-Plus (47 hand-crafted) + stem #6 recipe（single-stem ablation） | 0.66966 (1 seed) | −0.00078 vs stem #6 baseline 0.67044 | 單獨 OOF 平手；保留為 7th-stem；詳 [§53](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) |
-| 37.11 | AP-D1：7-way per-task hillclimb（stored only） | 0.71109 | +0.00238 vs 6-way × stored only seed42 | stem #7 在 stack 內證明 diversity；詳 [§53.11](#5311-ap-d1-結果--7-way-per-task-hillclimb2026-05-18) |
-| 37.12 | AP-D3：7-way × 3-view per-task TTA（seed42） | 0.71364 | +0.00346 vs 6-way × 3-view × seed42 (0.71018) | 舊 SOTA；詳 [§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18) |
-| 38 | Aug-Plus v2：Ollama qwen2.5:7b-instruct 本機合成 140 列 + stem #8 single-stem | 0.66805 (seed42) / 0.66426 (3-seed) | −·0.00161 vs stem #7 seed42 0.66966 | 單 stem 平手；仍加入 stack 證明 diversity；詳 [§55](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) |
-| **38.4** | **AP-D4：8-way × 3-view per-task TTA（seed42）** | **0.71608** | **+0.00244** vs AP-D3 0.71364 | **NEW SOTA**；T4 +0.00661（LLM Misleading 擴增奥效）；詳 [§55](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) |
-| 39 | AP-D5 grid 0.05 可行性評估（compute-infeasible） | — | 0（SOTA 維持）| 預估 Stage A 單輪 ≈3h，未產出 summary；列為負面消融與 Phase 40 向量化前置條件；詳 [§56](#56-phase-39--ap-d5-細粒度權重搜索可行性評估compute-infeasiblesota-維持-0716082026-05-21) |
-
-### 4.2 U10 弱監督軌跡（best.pt path）
-
-| Phase | 配置 | T1 | T2 | T3 | T4 | weighted | Δ vs baseline |
-| :--: | :-- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 31 | baseline `p2_combo_best` (15 ckpt) | 0.92767 | 0.47585 | 0.86551 | 0.43079 | 0.66734 | — |
-| 31 | pseudo v1 solo (15 ckpt) | 0.92793 | 0.47611 | 0.86013 | 0.44736 | 0.67162 | +0.00428 |
-| 31 | pseudo v2 solo (15 ckpt) | 0.93683 | 0.49806 | 0.86559 | 0.42983 | 0.67219 | +0.00485 |
-| 31 | stack baseline + v1 (30 ckpt) | 0.93222 | 0.47691 | 0.86486 | 0.44719 | 0.67396 | +0.00662 |
-| 31 | stack baseline + v2 (30 ckpt) | 0.93929 | 0.49278 | 0.87065 | 0.43800 | 0.67627 | +0.00893 |
-| **31** | **stack baseline + v1 + v2 (45 ckpt)** | 0.93594 | 0.48939 | 0.87023 | 0.44513 | **0.67746** | **+0.01012** |
-
-完整 U10 pipeline（M1 採集 → M3 抽取 → M4 偽標 → M5 兩階段訓練 → M6 ensemble）詳見 [§47](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓)。
-
-### 4.3 仍在 active v12 pool 的成員（17 員）
-
-詳見後段 [§12.1](#12-整體技術架構) 全表（24 員產出，17 員入 v12 池，3 員 0 權重，4 員拒入池）。
-
----
-
-## 5. 已完成項目索引（含主要 D1~D30）
-
-### 5.1 工程動作分類（D1 ~ D30）
-
-| 類別 | 編號範圍 | 數量 | 簡述 |
-| :-- | :--: | :--: | :-- |
-| 單模調優 / 配置 | D1, D4, D9 | 3 | combo_best / v2 / v3 三代 |
-| 多骨幹擴池 | D2, D14, D15, D21 | 4 | macbert-large / roberta-wwm / bert-base / large+focal+fgm |
-| Ensemble 與 Hillclimb | D3, D6, D8, D10, D12, D13, D16, D17, D18, D19, D20 | 11 | 從 2-way 到 17-way joint v12 |
-| Ablation Wave | D5, D7 | 2 | Wave A/B 16 組 + Wave C 4 組 |
-| Multi-seed | D11, D12, D13 | 3 | 試錯 + 拆分成功設計 |
-| TTA | D22, D24, D25 | 3 | U1 / U1-b / U1-c |
-| Backlog 驗證（拒絕） | D23, D26, D27, D28, D29, D30 | 6 | N2 / U3 / U5 / N3 / U2 / U6 |
-
-完整 30 項詳表（含時間、結果、SOTA 增益）見 [§143.1](#531-動機)。
-
-### 5.2 U1 ~ U12 Backlog 完成狀態
-
-| ID | 項目 | 狀態 | 對應紀錄 |
-| :-- | :-- | :-- | :-- |
-| U1 / U1-b / U1-c | TTA 多視角推論 | **完成且採納**（active SOTA 0.68925）| [§43](#43-仍在-active-v12-pool-的成員17-員) / [§45](#45-phase-24u2-ema--warm-start-設置與訓練2026-05-05) / [§46](#46-phase-25-完成--u6--b4-nllb-600m-中英中-回譯資料增強2026-05-05) |
-| U2 | EMA decay=0.995 + warm-start | 完成且拒絕 | [§52](#52-u1--u12-backlog-完成狀態) / X12 |
-| U3 | SWA 末 K=3 epoch 平均 | 完成且拒絕 | [§49](#49-phase-33--class-weighted-ce--focal-t4-γ30--4-way-per-task-hillclimb--new-sota-070185) / X9 |
-| U5 | T4 class-balanced re-sampling | 完成且拒絕 | [§50](#50-phase-34--m3-v3--m4-v3--stem-5classw_focal-v3-5-way-per-task-hillclimb--new-sota-070569) / X10 |
-| U6 | NLLB-600M zh-en-zh 回譯 | 完成且拒絕 | [§53](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) / X13 |
-| **U6-pro** | NLLB-3.3B + ChrF≥0.5 過濾回譯 | **完成且採納**（current SOTA 0.71018）| [§142](#142-設定檔-configsbaseyaml-範本) |
-| N3 | NeZha → ERNIE fallback backbone | 完成且拒絕 | [§51](#51-工程動作分類d1--d30) / X11 |
-| **U10** | TW 企業永續報告書專用偽標 pipeline | **完成且採納**（best.pt SOTA 0.67746）| [§58](#58-工程上限拆解推導依據) |
-| U11 | StratifiedGroupKFold by company sanity | 完成（診斷）| [§47](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓) |
-| U12 | OOF cross-fold variance | 完成（診斷）| [§48](#48-phase-32--u10-per-task-tta--068632u10-stack-067746--000886) |
-| U8 | Pipeline B-Plan T1→T3→T2/T4 串接 | 暫緩 | — |
-| U9 | Qwen2.5-7B LoRA 4-bit r=16 | 阻塞（8 GB 顯存不足）| — |
-
----
-
-## 6. 已驗證為負方向（X1 ~ X13 禁區）
-
-完整 X1 ~ X13 禁區詳見 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)。摘要：
-
-| 代號 | 方向 | 結果 | 教訓 |
-| :--: | :-- | :-- | :-- |
-| X1 / X1' | EMA decay=0.999 / 0.995（無或短 warm-start） | 0.473 / 0.630 | EMA 需 cosine 末段 LR=0 + 拉長至 8~10 epoch |
-| X2 / X2' | Uniform LS / per-task LS(T1/T3) | 0.49 / ensemble 0 權重 | LS 變體與主力 combo 太相似無 diversity |
-| X3 | LLRD 0.95 base 模型 | −0.005 | base 12 層太淺 |
-| X4 | combo_v3 multi-seed 直接替換 | −0.002 | variance reduction 用並列不用替換 |
-| X5 | macbert-large 作主力單模 | −0.003 | 8 GB + 1k 樣本不適合 326M 模型 |
-| X6 | xlm-roberta-base | 0.61 | 多語模對純中文劣勢 |
-| X7 | ELECTRA-base 同設定 | 單模 0.627 / admission 0 accept | 同設定不重跑；換訓練策略才再試 |
-| X8 | TTA 三視角等權 | −0.00006 | 必須 per-task 加權，等權路線關閉 |
-| X9 | SWA 末 K=3 epoch 平均 | −0.0031 | cosine 末段 LR ≠ 0 為主因 |
-| X10 | T4 global re-sampling | T4 +0.012 / T2 −0.014（淨持平） | 改 per-task loss weighting |
-| X11 | NeZha / ERNIE-3.0-base-zh | 不可訓 / 0.609 | base 同級異源 backbone 不利 |
-| X12 | EMA decay=0.995 + warm-start 2 epoch | −0.01617 | 同 X1' 限制條件 |
-| X13 | NLLB-200-distilled-600M zh-en-zh BT | −0.00237 | 換 NLLB-3.3B+；加 round-trip ChrF ≥ 0.5 過濾 |
-
-**暫緩**：
-
-- **U8** Pipeline B-Plan（T1 → T3 → T2/T4 串接）— 待 U10 結果穩定後再評估。
-- **U9** Qwen2.5-7B LoRA — RTX 5060 Laptop 8 GB 不足，需雲端 16 GB+ 顯存。
-
-**已從本檔移除（避免污染現任結果）**：U10 PATH-D / U13 PATH-E / U14 PATH-C / U15 PATH-B Wikipedia + IPCC 偽標等 2026-05-09 之前所有外部資料線；現任 [§47](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓) U10 為 2026-05-09 重啟的「企業永續報告書專用」版本（已成功）。
-
----
-
-## 7. 結構性殘留與工程上限
-
-### 7.1 Class collapse（兩個永遠 0 的少數類）
-
-| Task | 類別 | 訓練集真實次數 | baseline 模型 OOF 預測次數 | U10 v2 偽標籤次數 |
-|---|---|---:|---:|---:|
-| T2 | within_2_years | 個位數 | **0** | 0 |
-| T4 | Misleading | 1 | **0** | 0 |
-
-這兩類是「baseline 模型完全不預測 → teacher pseudo 不會選 → 偽標池仍 0」的閉環。詳見 [§47.8](#478-結構性殘留問題class-collapse)。
-
-**根本解（待辦）**：Class-weighted CE / Focal-T4 γ=3.0 重訓 + T4-only 過採樣（X10 已試過 global re-sampling，需改 per-task loss weighting）。
-
-### 7.2 工程上限拆解
-
-| 加權上限 | 計算 | 與 active SOTA 0.68925 的距離 |
-|---|---|---:|
-| 保守 ≈ 0.7236 | 0.20·0.945 + 0.15·0.585 + 0.30·0.910 + 0.35·0.600 | +0.035 |
-| 寬鬆 ≈ 0.7570 | 0.20·0.95 + 0.15·0.62 + 0.30·0.92 + 0.35·0.65 | +0.069 |
-
-詳見 [§58.1](#581-兩種上限的定義)。
-
-### 7.3 X18 self-training 上限定理（U10 邊界）
-
-U10 使用 **15 baseline ckpt 平均 softmax** 作 teacher（不使用更強的 U1-c TTA），避免「自我訓練無法超越 teacher」上限直接打死。實測 +0.01012（baseline 0.66734 → stack 0.67746），符合「同 teacher self-training 增益接近上限」的預期。換 backbone 作 teacher（XLM-R / Qwen-LoRA）才能解鎖新 plateau。
-
----
-
-## 8. 待辦事項（ROI 排序）
-
-> 排序原則：(a) 校準現有 SOTA 為第一要務（避免 OOF 過擬合誤判）；(b) plateau 解鎖路徑次之；(c) 提交策略最後。
-> 已完成項目（U10 TTA、Class-weighted Focal、M3-v3、5-way hillclimb、3-view TTA、U6-pro 防幻覺回譯）已從本表移出，詳見 §48 ~ §53 的 Phase 32 ~ 36 紀錄與 §10 SOTA 表。
-> 所有 X1 ~ X13 禁區項目（§53.3）不得重跑同設定。
-
-| 優先 | ID | 名稱 | 預期增益 | 風險 / 阻塞 | 對應章節 |
-| :--: | :-- | :-- | :--: | :-- | :-- |
-| **1** | F1 valid 校準 | 6/03 valid 釋出後執行 hold-out per-task hillclimb；對 Phase 36 / 35 / 34 三版本同時量 OOF↔valid drift；若 valid 退化 > 0.008 則回退至 Phase 35 5-way 配置；同步以 GroupKFold（U11 / §40）復量 row-leak 影響 | 0（診斷工具） | 低；read-only；依賴 6/03 釋出時程 | §40 / §41 / §50 / §51 / §53 |
-| **2** | F2 跨家族 teacher（XLM-R / mDeBERTa / Qwen-LoRA） | X18 self-training 上限定理只適用於同 teacher；換 backbone 解鎖新 plateau。具體做法：(a) XLM-R-base 5-fold 加入 stem 池走 7-way TTA；(b) 若硬體允許再試 mDeBERTa-v3-base；(c) Qwen2.5-7B LoRA 暫緩（8GB 顯存阻塞，需雲端 16GB+） | T2/T4 各 +0.003 ~ +0.010；衝高 0.715 ~ 0.720 區段 | 高；硬體預算、cross-family stem 設計、額外 36 ~ 60 min 訓練成本 | §47.12 路徑 4 |
-| **3** | F3 提交策略（6/11 起 21 次 LB） | 規劃 6 個提交錨點：baseline / U1-c-TTA (0.68925) / v12 (0.69+) / Phase 33 hillclimb (0.70185) / Phase 35 5-way×3-view (0.70758) / Phase 36 6-way×3-view u6pro (0.71018)；每錨點對應 `reports/analysis/_ensemble/*_preds.csv` 1000 列預測 | LB 對齊；找出最穩 valid↔LB gap | 低 | §11.5 / §152 |
-| **4** | F4 7-way × 3-view 擴展（依賴 F2） | F2 一旦產出新跨家族 stem（XLM-R 等），立即把 stem 池擴成 7-way 重跑 `u10_per_task_tta`；per-task K=7 simplex（grid 0.1 ≈ 8008 點/task） | +0.002 ~ +0.005 vs Phase 36 0.71018 | 中；hypothesis space 指數增加，需嚴格 valid 校準 | 待新建 §53（執行後） |
-| **5** | F5 T4 Misleading 結構性處理 | 目前 T4 Misleading support=1，Phase 36 仍預測為 0；嘗試 (a) 把 U6-pro 對 T4 Misleading 的 BT 樣本權重再放大 2~3×；(b) Focal γ 提升至 5.0 + class weight 重設；(c) 若 valid 上 Misleading 樣本充足，加單獨 head 微調 | T4 +0.005 ~ +0.020（理論上限 ≈ 0.65） | 高；class collapse 為硬上限 | §21.1 / §56.0.3 |
-| **6** | F6 提交檔最終清理 | submission.json 產出 + `apply_constraints_batch` 強制覆寫 + 條件式約束單元測試（`tests/test_post_process.py`）+ schema validation；對應 §15 SOP | 0（不影響分數，避免無效提交） | 低；阻塞 6/17 截止 | §15 |
-
-**暫緩 / 阻塞**：
-
-- **U8** Pipeline B-Plan（T1 → T3 → T2/T4 串接）：Phase 36 已突破 0.71，B-Plan 邊際收益不明，待 valid 校準後再評估。
-- **U9** Qwen2.5-7B LoRA：RTX 5060 Laptop 8 GB 顯存不足，需雲端 16 GB+ 顯存。
-
----
-
-═══════════════════════════════════════════════════════════════════════════════
-
-# Part III — 技術設計 (Technical Design)
-
-本部分為原始訓練計畫書（v1.0）的整理：規劃哲學、資料剖析、訓練 SOP、推論 SOP、風險機制、交付物、排程。
-所有「為什麼這樣設計」的依據都在這裡，作為新成員的入門教材。
-
-═══════════════════════════════════════════════════════════════════════════════
-
-## 9. 規劃哲學
-
-過往 `final_summary/` 內的結論皆由 GPT-3.5 推導，存在三項風險：(1) 模型推論能力較弱，超參數搜索區間可能過窄；(2) 缺乏對原始論文方法 (ML-Promise、SemEval Promise Verification) 的對齊；(3) 對少數類別與條件式標籤的處理可能過於簡化。本計畫採「**證據驅動 (Evidence-driven)**」立場：
-
-1. 先以 Baseline 復現作為**唯一可信錨點 (anchor)**，建立可信的本地評分管線。
-2. 任何超參數 / 架構變更，必須在 5-Fold CV 上展現 ≥ +0.005 加權分數，且需 ≥ 3 個 seed 的一致性才採納。
-3. 所有實驗紀錄需 **可重現 (reproducible)**：固定 seed、固定 split、固定環境 hash。
-
----
-
-## 10. 競賽任務形式化
-
-設輸入文本 $x$，模型 $f_\theta$ 需同時輸出四個欄位的條件式標籤：
-
-| 子任務 | 符號 | 類別數 | 標籤集合 | 指標 | 權重 $w_t$ |
-| :-- | :-- | :--: | :-- | :-- | :--: |
-| T1 promise_status | $y_1$ | 2 | {Yes, No} | F1 (positive=Yes) | 0.20 |
-| T2 verification_timeline | $y_2$ | 5 | {already, within_2_years, between_2_and_5_years, longer_than_5_years, N/A} | Macro-F1 | 0.15 |
-| T3 evidence_status | $y_3$ | 3 | {Yes, No, N/A} | F1 (positive=Yes) | 0.30 |
-| T4 evidence_quality | $y_4$ | 4 | {Clear, Not Clear, Misleading, N/A} | Macro-F1 | 0.35 |
+<a id="competition-spec"></a>
+## 4. 競賽規格與評分定義
+
+### 4.1 四任務定義
+
+| 子任務 | 欄位 | 類別 | 指標 | 權重 |
+| :--: | :-- | :-- | :-- | --: |
+| T1 | `promise_status` | Yes / No | F1 with positive=Yes | 0.20 |
+| T2 | `verification_timeline` | already / within_2_years / between_2_and_5_years / longer_than_5_years / N/A | macro-F1 | 0.15 |
+| T3 | `evidence_status` | Yes / No / N/A | F1 with positive=Yes | 0.30 |
+| T4 | `evidence_quality` | Clear / Not Clear / Misleading / N/A | macro-F1 | 0.35 |
 
 最終分數：
 
-$$
-\mathcal{S}(\hat{y}, y) = \sum_{t=1}^{4} w_t \cdot \mathrm{F1}_t(\hat{y}_t, y_t), \qquad \sum_t w_t = 1
-$$
+```text
+S = 0.20 * F1(T1, Yes)
+  + 0.15 * macroF1(T2)
+  + 0.30 * F1(T3, Yes)
+  + 0.35 * macroF1(T4)
+```
 
-### 10.1 條件式標籤約束 (Hierarchical Constraints)
+### 4.2 階層條件式約束
 
-依官方欄位語意推導出嚴格約束：
+推論與 OOF 評估必須套用下列規則：
 
-- $y_1 = \text{No} \Rightarrow y_2 = y_3 = y_4 = \text{N/A}$，且 `promise_string = ""`、`evidence_string = ""`。
-- $y_3 = \text{No} \Rightarrow y_4 = \text{N/A}$，且 `evidence_string = ""`。
+1. 若 `promise_status = No`，則 `verification_timeline = N/A`、`evidence_status = N/A`、`evidence_quality = N/A`，且 `promise_string`、`evidence_string` 必須為空字串。
+2. 若 `evidence_status = No`，則 `evidence_quality = N/A`，且 `evidence_string` 必須為空字串。
 
-**結論**：推論時必須以「Hierarchical Post-Processing」強制覆寫，否則 T2/T4 會被無效預測污染 Macro-F1。
-
-### 10.2 提交與時程紀律
-
-- 6/03 驗證集釋出、6/10 測試集釋出、6/17 截止上傳、6/30 程式碼/報告繳交。
-- 每日提交上限 **3 次**，以最後一次為準。建議：每日固定 1 次、保留 2 次給意外回測。
+Phase 12、13、14 的關鍵教訓是：若 hillclimb 只最佳化每任務 F1 而不在 objective 內套用 post-process，會選到對單任務看似較好、但 joint score 較差的權重。AP-D4 因此必須在評分迴圈內套用 constraints。
 
 ---
 
-## 11. 資料初步剖析 (基於 `vpesg4k_train_1000 V1.csv`)
+<a id="sota-scoreboard"></a>
+## 5. SOTA 軌跡總覽
 
-**樣本量**：1,000 筆；欄位 14 欄（含 id/data/esg_type/標籤四欄/promise_string/evidence_string/company/ticker/page_number/pdf_url/company_source）。
+### 5.1 主要里程碑
 
-**重要觀察 (待 Step 1 由腳本自動量化驗證)**：
+| Phase | 核心變更 | OOF weighted | 決策 |
+| :--: | :-- | --: | :-- |
+| 1 | MacBERT-base baseline | 0.64150 | 建立可信本地評分管線 |
+| 2 | 單模調優與 combo_best | 0.66734 | 採納為早期主力 |
+| 4 | base + large probability ensemble | 0.67478 | 確認 ensemble 有效 |
+| 5 | combo_v2 + 3-way per-task hillclimb | 0.67954 | per-task 權重成為標準 |
+| 6 | Wave C 弱模加入 7-way pool | 0.68206 | 確認 diversity 比單模分數更重要 |
+| 8 | combo_v3 seed42 與 multi-seed avg 並列 | 0.68440 | variance reduction 不替換原成員 |
+| 13 | post-constraint joint hillclimb | 0.68770 | 修正 constraint coupling 問題 |
+| 18 | U1-c per-task/per-view TTA | 0.68925 | active path SOTA |
+| 31 | U10 baseline+v1+v2 best.pt stack | 0.67746 | 弱監督 best.pt path 成立 |
+| 33 | class-weighted CE + Focal-T4 + 4-way hillclimb | 0.70185 | 首次突破 0.70 |
+| 34 | M3-v3/M4-v3 + stem #5 | 0.70569 | U10 path 持續有效 |
+| 35 | 5-way × 3-view TTA | 0.70758 | 多視角推論再度有效 |
+| 36 | U6-pro 回譯 + stem #6 | 0.71018 | 首次突破 0.71 |
+| 37.12 | Aug-Plus handcrafted stem #7 + AP-D3 | 0.71364 | handcrafted minority seeds 有 ensemble diversity |
+| 38.4 | Ollama LLM-synth stem #8 + AP-D4 | 0.71608 | 現行 SOTA |
+| 39 | AP-D5 grid 0.05 可行性評估 | 0.71608 | 因成本過高不採納 |
 
-| 欄位 | 預期分佈問題 | 影響 |
+### 5.2 Phase 36 到 AP-D4 的關鍵增量
+
+| 階段 | 分數 | 主要新增成分 | 增量 |
+| :-- | --: | :-- | --: |
+| Phase 36 | 0.71018 | U6-pro BT stem #6 + 6-way × 3-view | 基準 |
+| Phase 37 AP-D3 | 0.71364 | Aug-Plus handcrafted stem #7 | +0.00346 |
+| Phase 38 AP-D4 | 0.71608 | Ollama LLM-synth stem #8 | +0.00244 |
+| Phase 39 | 0.71608 | fine grid 0.05 評估但未採納 | 0 |
+
+---
+
+<a id="current-pipeline"></a>
+## 6. 現行 AP-D4 管線
+
+### 6.1 8 個 stem
+
+| # | stem | 來源 | 角色 |
+| :--: | :-- | :-- | :-- |
+| 1 | `p2_combo_best` | 官方 1,000 筆，Phase 2 最佳配方 | 基準與校準錨點 |
+| 2 | `p2_combo_best_u10_pseudo` | U10 v1 pseudo，兩階段訓練 | T4 補強與弱監督 diversity |
+| 3 | `p2_combo_best_u10_pseudo_v2` | U10 v2 pseudo，兩階段訓練 | T2/T1 補強 |
+| 4 | `p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3` | U10 v2 + class weights + T4 Focal γ=3 | 破解 T2 minority collapse 的主力 |
+| 5 | `p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3` | M3-v3/M4-v3 corpus + classw/focal | T2 主要 diversity |
+| 6 | `p2_combo_best_classw_focal_u6pro` | U6-pro NLLB-3.3B 回譯 + classw/focal | minority augmentation 與 T4/T2 diversity |
+| 7 | `p2_combo_best_aug_plus` | handcrafted Aug-Plus 47 列 | AP-D3 主要新增成員 |
+| 8 | `p2_combo_best_aug_plus_v2` | stem #7 語料 + Ollama qwen2.5 LLM 合成 | AP-D4 主要新增成員，T4 lift 最大 |
+
+AP-D4 使用 seed42 OOF 作 apples-to-apples ensemble；stem #8 的 3-seed avg 曾測試但未作為當前 SOTA 替換成員。
+
+### 6.2 三視角 TTA
+
+| 視角 | 定義 | 作用 |
 | :-- | :-- | :-- |
-| promise_status | Yes 偏多 (估 ~80%) | T1 Macro 較易；F1 with positive=Yes 為主 |
-| verification_timeline | already / between_2_and_5_years 為大宗；within_2_years 與 longer_than_5_years 稀少 | T2 Macro 受少類拖累 |
-| evidence_status | Yes/No/N/A 三類；N/A 與 promise_status=No 完全相依 | T3 受 T1 影響 |
-| evidence_quality | Clear 較多；Misleading 極少 | T4 Macro 受 Misleading 拖累，且權重最高 (0.35) |
-| esg_type | 多標籤 (E / S / G 可同時)，以 `;` 分隔 | 可作為輔助特徵或輔助任務 |
-| data 文字長度 | 中文段落，預估 200 ~ 800 字 | MAX_LEN=256 會截斷部分樣本 |
-| company / ticker | 可能存在來源偏見 | 切分時必須避免「同公司樣本同時出現在訓練 + 驗證」的洩漏風險 |
+| stored | 訓練時 fold validation 的 OOF probs | 基準 OOF 視角 |
+| middle | 對中段 token window 重新 forward | 補足長段落中段資訊 |
+| tail | 對尾段 token window 重新 forward | 補足承諾或證據常在段尾的樣本 |
 
-> **企業級紀律**：Step 1 必須先輸出量化 EDA 報告 (HTML + JSON metrics)，禁止用「估計值」做決策。
+每個任務獨立搜尋 stem 權重與 view 權重，避免 T1/T2/T3/T4 的最佳 decision boundary 被同一組權重綁死。
 
----
+### 6.3 AP-D4 重現命令
 
-## 12. 整體技術架構
+完整命令與環境需求見 [REPRODUCE.md](REPRODUCE.md)。核心集成命令如下：
 
-### 12.1 任務建模策略選擇 (Decision Matrix)
-
-| 策略 | 優點 | 缺點 | 是否採用 |
-| :-- | :-- | :-- | :--: |
-| (A) Multi-task 共享 encoder + 4 個分類頭 | 知識共享、單模能解全部任務、推論成本低 | 任務間損失尺度可能衝突 | **採用為主力** |
-| (B) Pipeline (T1 → T3 → T2/T4) | 明確利用條件式約束 | 誤差累積、訓練複雜 | 作為比較組 (B-Plan) |
-| (C) 4 個獨立單任務模型 | 解耦、調優自由度高 | 4 倍訓練/推論成本、無法共享表徵 | 不採用（成本過高） |
-| (D) Generative LLM (LoRA) | 可融合條件式約束 | 1000 筆資料量易過擬合、輸出穩定性差、推論成本高 | 列入 Phase 5 高階探索 |
-
-### 12.2 主力架構 (Plan A — Multi-Task BERT)
-
-```
- ┌──────────────────────────┐
-input text ───→ │ Encoder (Backbone) │ ───→ pooled_output (H)
- │ hfl/chinese-macbert-... │ (取 [CLS] + Mean-Pool)
- └──────────────────────────┘
- │
- ┌──────────┬──────────┬────┴─────┬──────────┐
- ▼ ▼ ▼ ▼ 
- Dropout Dropout Dropout Dropout 
- ▼ ▼ ▼ ▼ 
- Linear Linear Linear Linear 
- (H, 2) (H, 5) (H, 3) (H, 4) 
- ▼ ▼ ▼ ▼ 
- T1 T2 T3 T4 
+```powershell
+python -m src.tools.u10_per_task_tta `
+  --stems p2_combo_best `
+          p2_combo_best_u10_pseudo `
+          p2_combo_best_u10_pseudo_v2 `
+          p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3 `
+          p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3 `
+          p2_combo_best_classw_focal_u6pro `
+          p2_combo_best_aug_plus `
+          p2_combo_best_aug_plus_v2 `
+  --grid-step 0.1 --max-rounds 4 --joint-rounds 2 `
+  --tag ap_d4_8way_3view
 ```
 
-**設計細節**：
+預期輸出：
 
-- **Pooling**：採 `[CLS]` + `mean(last_hidden_state * attention_mask)` 兩者 concat (維度 2H)，比僅用 `[CLS]` 對段落級任務更穩。
-- **Dropout**：每個任務頭前獨立 `Dropout(p=0.1)`。
-- **Loss 加權**：訓練 loss = $\sum_t \alpha_t \cdot \text{CE}_t$，初始 $\alpha = (1,1,1,1)$；可選方案以評分權重 $\alpha = (0.2, 0.15, 0.3, 0.35)$ 對齊。
-- **Class Weight**：T2、T4 啟用 inverse-frequency `class_weight`，由訓練 fold 內統計而得。
-- **AMP / fp16**：必開以節省顯存。
-- **Gradient Accumulation**：根據 GPU 顯存自動調整以維持 effective batch = 16。
-
-### 12.3 模型骨幹候選 (Backbone Pool)
-
-| Backbone | 規模 | 預期角色 | 優先序 |
-| :-- | :--: | :-- | :--: |
-| `hfl/chinese-macbert-base` | 102M | 快速迭代基準、Phase 1 主力 | 1 |
-| `hfl/chinese-roberta-wwm-ext` | 102M | 對照組（Baseline notebook 採用） | 2 |
-| `hfl/chinese-macbert-large` | 326M | Phase 3 升規模主力 | 3 |
-| `hfl/chinese-roberta-wwm-ext-large` | 326M | Ensemble 多樣化 | 4 |
-| `xlm-roberta-large` | 560M | 跨語言、決策邊界差異化 | 5 |
-
-> **原則**：先 base 後 large，先單模後集成，每一步都需 5-Fold OOF 證據支持。
-
-### 12.4 驗證策略 (Validation Protocol)
-
-- **K-Fold**：`StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)`，分層鍵採 `promise_status × evidence_status` 之 6 類聯合標籤（避免極稀類落單）。
-- **Group-aware 變體 (重要)**：若 EDA 顯示同一 `company` 出現 ≥ 5 筆，將額外比較 `StratifiedGroupKFold(group=company)` 以衡量「公司洩漏」對泛化的影響。任一指標低於普通 StratifiedKFold ≥ 0.02，採用 GroupKFold 為最終切分。
-- **Seed 集合**：`[42, 2024, 20260417, 7, 1234]` (5 顆)。
-- **OOF 機率保存**：每 (seed, fold) 儲存 `np.float16` 機率張量，作為 Ensemble 輸入。
-- **指標彙總**：每 fold 報告 weighted score + 4 個任務 macro-F1 + per-class F1；Phase 末以 `mean ± std` 呈現。
-
-### 12.5 集成策略 (Ensemble)
-
-1. **OOF Hill-Climbing**：對每個任務 $t$，在 OOF 機率上以貪心法 (greedy weighted average) 搜尋使 macro-F1 最大化的模型權重。
-2. **任務獨立輸出**：T1/T2/T3/T4 各自擁有最佳 ensemble，互不干擾。
-3. **Hierarchical Post-Process**：
- - $\hat{y}_1 = \text{No} \Rightarrow$ 覆寫 $\hat{y}_{2,3,4} = \text{N/A}$。
- - $\hat{y}_3 = \text{No} \Rightarrow$ 覆寫 $\hat{y}_4 = \text{N/A}$。
-4. **TTA (Test-Time Augmentation, 可選)**：對測試集做「全文 / 前 256 token / 後 256 token」三段平均。
-
----
-
-## 13. 完整里程碑路線圖 (Phased Roadmap)
-
-下表 **目標** 為計畫初擬時的保守估計，**實績** 為截至本版日期的 OOF 加權分數。
-
-| Phase | 目標 OOF 加權 | **實績 OOF 加權** | 主要工作 | 狀態 |
-| :--: | :--: | :--: | :-- | :--: |
-| **0 — Scaffolding** | — | — | 建立企業級專案骨架、環境、CI、EDA 報告 | 已完成 |
-| **1 — Baseline 復現** | 0.55 ~ 0.58 | **0.6415 ± 0.0133** | macbert-base + 5-Fold + AMP + 嚴謹評分管線 | 已完成（超標） |
-| **2 — 單模調優 + Combo** | 0.58 ~ 0.61 | **0.66734** (combo seed-avg ensemble) | LR / max_len / pooling / class_weight 系統掃描 + 最佳組合復測 | 已完成（超標） |
-| **3 — 升規模 (macbert-large)** | 0.61 ~ 0.64 | 0.66439 (lr2e5, 5-fold seed=42) | macbert-large 多 lr / epoch 變體；單模未通過 +0.005 門檻 | 已完成（負面結果，保留作集成輸入） |
-| **4 — 多骨幹集成** | 0.63 ~ 0.66 | **0.67478** (combo + large 1.5:1) | Probability ensemble (2-way) | 已完成 |
-| **5 — Wave A/B Ablation + Combo v2 + 3-way Hillclimb** | +0.005 | **0.67954** (per-task hillclimb) | 16 組未試參數掃描 + Combo v2 (FGM+Focal-T4) + 3-way ensemble + per-task 權重 | 已完成 |
-| **6 — Wave C 增強 + 7-way Hillclimb** | +0.002 | **0.68206** (7-way per-task hillclimb v3) | Token-level 資料增強、R-Drop、Multi-Sample Dropout 三大新技術；7 模型 ensemble 池 + 兩階段 hillclimb | 已完成 |
-| 7 — Combo v3 + 8-way Hillclimb | +0.002 | 0.68394 (8-way per-task hillclimb v4) | combo_v2 疊加 R-Drop + MSD → single OOF 0.67121；8 模型 ensemble 池；T4 首次突破 0.4560 | 已完成 |
-| 8 — Combo v3 Multi-seed 拆分 9-way | +0.0005 | 0.68440 (9-way per-task hillclimb v6) | combo_v3 增訓 seeds 2024+20260417；seed=42 (peaky) 與 3-seed 平均 (smooth) 並列為兩個 pool 成員；T4=0.4513 再創新高 | 已完成 |
-| 9 — Sprint A backbone 擴 pool + 11-way Hillclimb v7b | +0.001 | 0.68558 (11-way per-task hillclimb v7b, biased search) | 加入 p4a `chinese-roberta-wwm-ext-base` (0.66626) 與 p4b `bert-base-chinese` (0.67355)；p4c `xlm-roberta-base` 0.61269 被拒 (<0.65 門檻) | 已完成 |
-| 10 — Sprint B / T6 v1 (時間 token prefix) + 12-way Hillclimb v8 | +0.001 | 0.68669 (12-way per-task hillclimb v8) | regex 抽年份 + bucket prefix 注入；單模 T2 未直擊但 ensemble 在 T1/T3 各取權重 2.0 | 已完成 |
-| 11 — Sprint B / T6 v2 (專屬 bucket token) + 13-way Hillclimb v9 | +0.0001 | 0.68683 (13-way per-task hillclimb v9) | 5 個 added-vocab token 取代 prefix；單模 T2 退步 −0.0171；ensemble +0.00014 ≈ noise | 已完成 |
-| 12 — Sprint B / T7 (Focal-T4 γ=3.0) + 14-way Hillclimb v10 | +0.001 | 0.68660 (14-way per-task hillclimb v10) | `p7_focal_g3` 單模 0.67416 (歷史第二高，T4 +0.0237 為單模史上最大 T4 增益)；ensemble 因 constraint coupling 抵銷 per-task 增益 → SOTA 未破 | 已完成（未破 SOTA） |
-| 13 — Sprint B 收尾批次 / U2 EMA-995 + U4 LS(T1/T3) + U7 Joint Hillclimb v11 | +0.001 | 0.68770 (16-way joint post-constraint hillclimb v11) | p8_ema995 崩潰 0.63010（EMA 無 warm-start）；p9_ls_t1t3 0.67334 (+0.00213)；v11 聯合 hillclimb 直接優化 post-constraint score（4 次 accept 全在 T3，T4 +0.0018 為 constraint coupling 連動效應）| 已完成（前一代 SOTA） |
-| **14 — Sprint C / N1 結構性多樣化 + 17-way Joint Hillclimb v12** | **+0.0005 ~ +0.003** | **0.68825** | `p10_large_focal_fgm` 單模 OOF=0.66874 入池；v12 8 次 accept 全在 T2，p10 取得 T2 權重 1.50，T2 0.5036→0.5072 | 已完成（目前訓練 ensemble SOTA） |
-| **15 — Sprint C 後續 / U1 TTA 推論擴增** | **+0.00054** | **0.68879** | U10 外部 pseudo 線暫緩並清除後，先做官方資料、無重訓的推論增益；`stored+middle` 已被 Phase 18 U1-c 取代 | 已完成（上代 active SOTA）|
-| **18 — U1-c per-task / per-view TTA coordinate descent** | **+0.00046 vs U1 / +0.00100 vs v12** | **0.68925** | 零再訓，14 員 × stored/middle/tail 三視角 per-task 加權；T2 0.51026 史上最高 | 已完成（**目前 active SOTA**）|
-| 16 — Sprint C / N2 p11 ELECTRA base admission | 0 | 單模 0.62694；admission 0.68825 | p11 5-Fold 完成但未達 0.65 gate；v16 18-way joint hillclimb 0 accept、p11 四任務 0 權重 | 已完成（未採納） |
-| 17 — 最終衝刺 (6/03 驗證集 / 6/10 測試集) | — | — | 提交策略、Full-Data Refit、文件與報告；U12 train↔val gap 分析 | 待辦 |
-
-> 初期單模階段的 **Gate 條件**：5-Fold 平均 weighted score ≥ 上階段 + 0.005，且任一單任務指標跌幅 ≤ 0.005。Phase 6 之後進入高分 plateau，Gate 改為「是否提供新 ensemble diversity / 是否推高 post-constraint joint score」。Phase 3 大模型單模未通過 Gate，但 ensemble (Phase 4) 通過。
-
----
-
-## 14. 企業級專案骨架 (Step 0 產出)
-
-```
-esg-veripromise-2026/
-├── data/
-│ ├── raw/ # 官方原始檔案 (read-only)
-│ ├── processed/ # 清洗後 / 切分快照
-│ └── splits/ # 5-Fold 索引 .json (固定 seed)
-├── configs/
-│ ├── base.yaml # 共用預設值
-│ ├── exp_p1_baseline.yaml # Phase 1
-│ ├── exp_p2_tune_*.yaml # Phase 2 系列
-│ ├── exp_p3_large_*.yaml # Phase 3 系列
-│ └── exp_p4_*.yaml # Phase 4 系列
-├── src/
-│ ├── __init__.py
-│ ├── seed.py # 全域 seed 工具
-│ ├── data/
-│ │ ├── loader.py # CSV/JSON 載入、欄位驗證
-│ │ ├── splits.py # StratifiedKFold / StratifiedGroupKFold
-│ │ └── dataset.py # PyTorch Dataset / collate_fn
-│ ├── models/
-│ │ ├── multitask.py # MultiTaskClassifier
-│ │ └── pooling.py # ClsMeanPooler
-│ ├── training/
-│ │ ├── trainer.py # AMP / grad accum / EMA / early stop
-│ │ ├── losses.py # CE + class_weight + (Phase 4) FGM
-│ │ └── schedulers.py # cosine + warmup
-│ ├── inference/
-│ │ ├── predict.py # 推論 + Hierarchical Post-Process
-│ │ └── tta.py # TTA (Phase 5)
-│ ├── ensemble/
-│ │ └── hillclimb.py # Per-task greedy weighted ensemble
-│ ├── eval/
-│ │ ├── metrics.py # weighted_score / per-task macro-F1
-│ │ └── report.py # markdown / html 報告產生
-│ └── tools/
-│ ├── eda.py # 自動 EDA → reports/eda/
-│ └── verify_env.py # 環境一致性檢查
-├── scripts/
-│ ├── 00_setup.ps1 # Windows 環境腳本
-│ ├── 01_eda.ps1 # 跑一次完整 EDA
-│ ├── 10_train_kfold.ps1 # 跑單一 config 的 5-Fold
-│ └── 20_submit.ps1 # 產出提交檔
-├── outputs/
-│ ├── checkpoints/{exp}/seed{S}/fold{F}/best.pt
-│ ├── oof/{exp}/seed{S}/fold{F}/probs.npz
-│ ├── logs/{exp}/... # JSONL training logs
-│ └── submissions/sub_YYYYMMDD_v{N}.json
-├── reports/
-│ ├── eda/eda_report.html
-│ ├── experiments/{exp}/score_summary.csv
-│ └── final_report.md
-├── tests/
-│ ├── test_metrics.py # 評分函式單元測試
-│ ├── test_post_process.py # 條件式約束單元測試
-│ └── test_split_no_leak.py # 公司洩漏檢查
-├── requirements.txt
-├── pyproject.toml # 專案中介資訊 + ruff/black 規則
-├── README.md
-└── .gitignore
-```
-
-### 14.1 環境鎖版 (`requirements.txt`)
-
-```
-torch>=2.2,<2.5
-transformers>=4.41,<4.46
-datasets>=2.19
-scikit-learn>=1.4
-pandas>=2.2
-numpy>=1.26,<2.0
-pyyaml>=6.0
-tqdm>=4.66
-matplotlib>=3.8
-seaborn>=0.13
-accelerate>=0.30
-sentencepiece>=0.2
-protobuf>=4.25,<5
-ruff>=0.4
-pytest>=8.2
-```
-
-### 14.2 設定檔 (`configs/base.yaml` 範本)
-
-```yaml
-project_name: vp_esg_2026
-data:
- csv_path: data/raw/vpesg4k_train_1000 V1.csv
- text_field: data
- label_fields:
- promise_status: ["Yes", "No"]
- verification_timeline: ["already", "within_2_years", "between_2_and_5_years", "longer_than_5_years", "N/A"]
- evidence_status: ["Yes", "No", "N/A"]
- evidence_quality: ["Clear", "Not Clear", "Misleading", "N/A"]
- field_weights: {promise_status: 0.20, verification_timeline: 0.15, evidence_status: 0.30, evidence_quality: 0.35}
- group_field: company
-split:
- type: stratified_kfold # or stratified_group_kfold
- n_splits: 5
- stratify: [promise_status, evidence_status]
- shuffle: true
-model:
- backbone: hfl/chinese-macbert-base
- max_length: 256
- dropout: 0.1
- pooling: cls_mean
-training:
- epochs: 5
- batch_size: 16
- grad_accum: 1
- lr: 2.0e-5
- weight_decay: 0.01
- warmup_ratio: 0.10
- scheduler: cosine
- grad_clip: 1.0
- label_smoothing: 0.0
- use_amp: true
- use_class_weight: true
- task_loss_weights: {promise_status: 1.0, verification_timeline: 1.0, evidence_status: 1.0, evidence_quality: 1.0}
- early_stop_patience: 2
- ema:
- enable: false
- decay: 0.999
-seeds: [42]
-runtime:
- num_workers: 2
- pin_memory: true
- log_every: 50
- save_oof: true
+```text
+weighted = 0.71608 +/- 0.0005
+T1 = 0.94387
+T2 = 0.63150
+T3 = 0.88011
+T4 = 0.48157
 ```
 
 ---
 
-## 15. 推論與後處理 SOP
+<a id="data-strategy"></a>
+## 7. 資料策略
 
-```
-ensemble_probs(test) ─→ argmax per task ─→ raw_preds
- │
- ├─ if y1 == "No":
- │ y2, y3, y4 := "N/A"
- │ promise_string := ""
- │ evidence_string := ""
- │
- ├─ if y3 == "No":
- │ y4 := "N/A"
- │ evidence_string := ""
- │
- └─ Schema validation ─→ submission.json
-```
+### 7.1 官方資料
 
-**單元測試** (`tests/test_post_process.py`) 必須涵蓋上述全部覆寫情境，CI 失敗則禁止生成提交檔。
-
----
-
-## 16. 風險與止損機制
-
-| 風險 | 監控指標 | 止損動作 |
-| :-- | :-- | :-- |
-| 公司洩漏 (company leakage) | StratifiedKFold vs GroupKFold 差距 ≥ 0.02 | 改採 GroupKFold |
-| 顯存爆掉 | OOM | bs/2 + grad_accum×2 |
-| 弱項補強反向劣化 | 任一任務 macro-F1 跌 ≥ 0.005 | 回滾配置 |
-| Seed 變異過大 (std ≥ 0.01) | – | 增加 seed 至 7 顆 |
-| 提交額度耗盡 | 當日提交次數 ≥ 2 | 進入 only-on-improvement |
-| 標註雜訊 | 模型錯預測但 prob ≥ 0.85 的樣本 ≥ 5% | 啟動人工複核（不修改測試集） |
-
----
-
-## 17. 交付物 (Deliverables)
-
-| 項目 | 路徑 |
+| 項目 | 內容 |
 | :-- | :-- |
-| 完整可重現程式碼 | `src/` + `configs/` + `scripts/` |
-| 5-Fold OOF 機率 | `outputs/oof/{exp}/...` |
-| 模型權重 | `outputs/checkpoints/{exp}/...` |
-| 評分總表 | `reports/experiments/score_summary.csv` |
-| EDA 報告 | `reports/eda/eda_report.html` |
-| 提交檔 | `outputs/submissions/sub_YYYYMMDD_v{N}.json` |
-| 最終書面報告 | `reports/final_report.md` |
+| 檔案 | `vpesg4k_train_1000 V1.csv`、`vpesg4k_train_1000 V1.json` |
+| 筆數 | 1,000 |
+| 公司數 | 50 家 TWSE 上市公司 |
+| 時間範圍 | FY2022-FY2024 |
+| 切分 | 5-Fold StratifiedKFold，分層鍵為 `promise_status` × `evidence_status` |
+| 防洩漏注意 | 外部永續報告資料不得與這 50 家公司重疊 |
+
+### 7.2 U10 弱監督資料
+
+U10 的核心不是「任意外部 ESG 文字」，而是只取與競賽同質的台灣企業永續報告書段落，並排除已標註 50 家公司。完整 pipeline 見 [§47](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓)。
+
+| 階段 | 產物 | 重點 |
+| :-- | :-- | :-- |
+| M1 | 31 disjoint tickers × 62 PDFs | 完全避開官方 50 家公司 |
+| M3 | corpus v1/v2/v3 | 從 PDF 抽段、SimHash 去重、ESG 與量化線索過濾 |
+| M4 | pseudo labels v1/v2/v3 | teacher softmax + admission gate |
+| M5 | two-stage training | pseudo+real 預訓練，再 real-only 微調 |
+| M6 | OOF ensemble | baseline/v1/v2/v3 與後續 classw/focal stem 合流 |
+
+### 7.3 U6-pro 回譯資料
+
+U6-pro 使用 NLLB-3.3B 與 round-trip ChrF 過濾，修正早期 NLLB-600M 回譯保真度不足的失敗教訓。它作為 stem #6 對 Phase 36 0.71018 有直接貢獻。
+
+### 7.4 Aug-Plus 與 LLM 合成資料
+
+| 階段 | 來源 | 目的 | 結果 |
+| :-- | :-- | :-- | :-- |
+| Phase 37 | handcrafted 47 列 minority seeds | T4 Misleading、T2 within_2_years 補強 | 單 stem 平手，但 AP-D3 ensemble +0.00346 |
+| Phase 38 | Ollama qwen2.5:7b-instruct 本機合成 140 raw seeds | 進一步補 T4/T2 稀有類 | AP-D4 +0.00244，T4 +0.00661 |
+
+資料擴增路線的關鍵教訓：單 stem 分數不一定會升，但只要錯誤型態不同，per-task ensemble 仍可能有效。
 
 ---
 
-## 18. 排程
+<a id="model-training-spec"></a>
+## 8. 模型與訓練規格
 
-| 期間 | 階段 | 主要產出 | 狀態 |
-| :-- | :-- | :-- | :--: |
-| Day 1 | Phase 0 — Scaffolding | 專案骨架 + EDA 報告 | 已完成 |
-| Day 2 ~ 3 | Phase 1 — Baseline 復現 | macbert-base 5-Fold × 3 seeds → **0.6415** | 已完成 |
-| Day 4 ~ 6 | Phase 2 — 單模調優 + Combo | 8 組 ablation + 3-seed combo → **0.66734** | 已完成 |
-| Day 7 ~ 9 | Phase 3 — 升規模 | macbert-large baseline/lr2e5/ep8 (負面) | 已完成 |
-| Day 10 ~ 13 | Phase 4 — 多骨幹 + 弱項補強 | combo+large=0.67478 → Phase 5 per-task=0.67954 | 已完成 |
-| Day 14 | Phase 6 — Wave C + 7-way Hillclimb | aug/R-Drop/MSD + 7-way ensemble → **0.68206** | 已完成 |
-| Day 15 | Phase 7 — Combo v3 + 8-way Hillclimb | combo_v2 + R-Drop + MSD → 0.67121 單模；8-way ensemble → 0.68394 | 已完成 |
-| Day 16 | Phase 8 — combo_v3 Multi-seed + 9-way Hillclimb | 拆 peaky/avg 為兩成員 → 0.68440 (Phase 8 SOTA) | 已完成 |
-| Day 17 | Phase 9 — Sprint A backbone 擴 pool + 11-way Hillclimb v7b | p4a/p4b 入池（p4c 拒）+ biased search → 0.68558 | 已完成 |
-| Day 18 | Phase 10 — Sprint B / T6 v1 時間 token prefix + 12-way Hillclimb v8 | p5_t6_time_token + biased search → 0.68669 | 已完成 |
-| Day 19 | Phase 11 — Sprint B / T6 v2 專屬 bucket token + 13-way Hillclimb v9 | p6_t6v2_bucket_tok + biased search → **0.68683（當時 SOTA）** | 已完成 |
-| Day 20 | Phase 12 — Sprint B / T7 Focal-T4 γ=3.0 + 14-way Hillclimb v10 | p7_focal_g3 單模 0.67416；ensemble 0.68660（被 constraint coupling 抵銷，未破 SOTA）| 已完成 |
-| Day 21 | Phase 13 — Sprint B 收尾批次：U2 EMA-995 + U4 LS(T1/T3) + U7 Joint Hillclimb v11 | p8=0.63010（EMA 失敗）/ p9=0.67334 (+0.00213)；**v11=0.68770 (+0.00087 vs v9 → 新 SOTA)** | 已完成 |
-| Day 22 | Phase 14 — N1 large×Focal×FGM + Joint Hillclimb v12 | p10=0.66874 入池；**v12=0.68825 (+0.00055 vs v11 → 新 SOTA)**，T2=0.5072 | 已完成 |
-| Day 23 | Phase 15 — U1 TTA 推論擴增 | `stored+middle`=**0.68879**（目前 active SOTA），未引入外部資料、未重訓 | 已完成 |
-| Day 24 | Phase 16 — N2/p11 ELECTRA base + v16 admission | 單模 0.62694；v16 admission 0 accept；p11 未納入 active ensemble | 已完成（未採納）|
-| Day 25 | Phase 17 — U1-b `stored+middle+tail` 三視角等權 TTA 補測 | 0.68873，較 `stored+middle` 低 0.0000597；等權三視角路徑關閉 | 已完成（負向）|
-| Day 25 | Phase 18 — U1-c per-task / per-view TTA coordinate descent（零再訓）| **0.68925**（+0.00046 vs U1 / +0.00100 vs v12）；T2 0.51026 為史上最高 | 已完成（新 SOTA）|
-| Day 25 | Phase 19 — U11 GroupKFold sanity（read-only）| StratifiedKFold row-leak ≈ 99.93%；GK drift T2/T4 過高 → MONITOR不重訓，記錄 valid↔OOF gap 預期 | 已完成（診斷）|
-| Day 25 | Phase 20 — U12 OOF cross-fold variance（read-only，12/14 員）| 單員 std=0.0115；ensemble noise ≈ 0.0045 → U1-c 虛增益在雜訊內，需 valid 重驗 | 已完成（診斷）|
-| Day 25 | Phase 21 — B1 / U3 SWA `p2_combo_best_swa`（K=3 epoch 平均，5 折）| member-level OOF 0.66252 vs best-epoch 0.66558（−0.0031）；fold4 −0.0139；未過 admission；列入 X9 | 已完成（拒絕）|
-| Day 25 | Phase 22 — B2 / U5 T4 sqrt-inverse-freq re-sampling（alpha=0.5，5 折）| OOF 0.66562（+0.00004，持平）；T4 +0.012 但 T2 −0.014 抵銷；未過 admission；列入 X10 | 已完成（拒絕）|
-| Day 25 | Phase 23 — C1 / N3 NeZha-base → ERNIE-3.0-base-zh fallback | NeZha fallback 為 BertModel 不可訓（fold0 0.549）；ERNIE 5 折 mean 0.6086 << 0.66；列入 X11 | 已完成（拒絕）|
-| Day 25 | Phase 24 — U2 / B3 EMA decay=0.995 + warm-start 2 epoch（`p2_combo_best_ema995_warm`） | member OOF 0.64941 vs baseline 0.66558（−0.01617）；5 折全退化、T4 −0.062；列入 X12 | 已完成（拒絕）|
-| Day 25 | Phase 25 — U6 / B4 NLLB-200-distilled-600M 中→英→中 回譯（T2/T4 少類 138 源員 × 1.22 → 168 增強樣本，`p2_combo_best_u6_bt`） | member OOF 0.66321 vs baseline 0.66558（−0.00237）；T2 −0.014、T4 −0.031；列入 X13 | 已完成（拒絕）|
-| 5/03 ~ 6/02 | Sprint C 後續 | U3 SWA、U5 T4 re-sampling、N3 新 backbone、U11 GroupKFold、U12 OOF↔valid gap；U1-b/U1-c 已完；B1+B2+C1+B3 全數失敗 | U10 外部 pseudo 線已暫緩並清除；**內部可控加分項全部試遍，唯一剩餘 U6 回譯增強（需外部翻譯 API）** |
-| 6/03 ~ 6/10 | 驗證集校正 + Sprint C | OOF vs Valid gap 分析 (U12)、GroupKFold sanity check (U11)、提交策略 | 待辦 |
-| 6/10 ~ 6/17 | 測試集衝刺 | 提交，至多 21 次 | 待辦 |
-| 6/24 ~ 6/30 | 結案 | 最終報告與程式碼提交 | 待辦 |
+### 8.1 建模選擇
+
+| 策略 | 優點 | 缺點 | 決策 |
+| :-- | :-- | :-- | :-- |
+| Multi-task encoder + 4 heads | 分享語意表徵、推論成本低 | 任務 loss 可能互相牽制 | 主力採用 |
+| Pipeline T1 -> T3 -> T2/T4 | 明確利用條件約束 | 錯誤會串接放大 | 暫緩，待 valid 後重估 |
+| 4 個獨立單任務模型 | 任務解耦 | 4 倍成本且缺乏共享 | 不採用 |
+| Generative LLM / LoRA | 可直接建模約束 | 8 GB 顯存與 1k 資料限制大 | 暫緩，需雲端 16 GB+ |
+
+### 8.2 主力模型
+
+| 元件 | 設定 |
+| :-- | :-- |
+| Backbone | `hfl/chinese-macbert-base` |
+| Pooling | `[CLS]` + attention-mask mean pooling concat |
+| Heads | T1/T2/T3/T4 四個獨立 linear heads |
+| Max length | 主力 384，必要時 512/256 做 ablation |
+| Optimizer | AdamW |
+| Scheduler | cosine + warmup |
+| Precision | AMP fp16 |
+| Batch | batch_size=8 + grad_accum=2 為 8 GB GPU 主力設定 |
+| Early stop | patience=2 |
+| Seeds | 42、2024、20260417 等；AP-D4 採 seed42 apples-to-apples |
+
+### 8.3 Loss 與正則化
+
+| 技術 | 狀態 | 教訓 |
+| :-- | :-- | :-- |
+| Class-weighted CE | 採納於 U10/classw stems | 對 T2 minority 特別有效 |
+| Focal Loss on T4 γ=3 | 採納於 classw/focal stems | 對 T4 稀有類有幫助，但需 ensemble 才穩 |
+| FGM | 早期 combo 有效 | 與其他 diversity 成員搭配有效 |
+| R-Drop | combo_v3 有效 | 單模增益不大但提供 ensemble diversity |
+| Multi-Sample Dropout | combo_v3 有效 | 與 R-Drop 疊加後可成新成員 |
+| EMA | 禁區 | 短訓練與 shadow init 造成嚴重退化 |
+| SWA | 禁區 | cosine 末段 LR 未歸零時效果差 |
 
 ---
 
-═══════════════════════════════════════════════════════════════════════════════
+<a id="ensemble-and-postprocess"></a>
+## 9. Ensemble、TTA 與後處理規格
 
-# Part IV — Phase 詳細紀錄 (Append-only Phase Log)
+### 9.1 Ensemble 原則
+
+1. 永遠保存 OOF probabilities，而不是只保存 argmax prediction。
+2. 新模型即使單模較弱，只要錯誤型態不同，就可加入 pool 由 hillclimb 決定權重。
+3. 不用 multi-seed average 直接替換原 seed；應以並列成員加入 pool。
+4. 新成員若初始權重為 0，搜尋必須 bias 到新維度，否則 warm-start 不容易探索到有效組合。
+5. 若任務存在後處理耦合，objective 應以 post-constraint joint score 為準。
+
+### 9.2 後處理 SOP
+
+```text
+raw task logits
+  -> per-task weighted ensemble probabilities
+  -> argmax predictions
+  -> hierarchical constraints
+  -> schema validation
+  -> prediction CSV / submission JSON
+```
+
+### 9.3 單元測試要求
+
+| 測試 | 必須涵蓋 |
+| :-- | :-- |
+| `tests/test_metrics.py` | weighted score、binary F1、macro-F1、一致性檢查 |
+| `tests/test_post_process.py` | T1=No 下游覆寫、T3=No T4 覆寫、空字串欄位 |
+| Aug-Plus 測試 | schema validation、去重、品質閘門、promote 流程 |
+
+---
+
+<a id="experiment-dashboard"></a>
+## 10. 完成項目索引
+
+### 10.1 工程動作分類
+
+| 類別 | 代表項目 | 結論 |
+| :-- | :-- | :-- |
+| Baseline 與單模調優 | Phase 1-3 | MacBERT-base 是主力，large 單模不採納但可當 diversity |
+| Ensemble 與 hillclimb | Phase 4-14、33-39 | per-task 權重、joint objective、TTA 是主要加分來源 |
+| 弱監督 | U10 / Phase 31-34 | 同質企業永續報告書 pseudo data 有效 |
+| 回譯 | U6 / U6-pro | 600M 失敗，3.3B + ChrF 過濾成功 |
+| 手工與 LLM 合成 | Phase 37-38 | 單 stem 不一定強，但可提供 minority diversity |
+| 診斷 | U11/U12 | GroupKFold 與 OOF variance 用於 valid drift 監控 |
+| 負面消融 | X1-X14 | 避免重跑已證明不划算或不穩的方向 |
+
+### 10.2 目前可採納成果
+
+| 成果 | 狀態 | 對應章節 |
+| :-- | :-- | :-- |
+| AP-D4 8-way × 3-view per-task TTA | Current SOTA | [§55](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) |
+| AP-D3 7-way × 3-view per-task TTA | 強 fallback | [§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18) |
+| Phase 36 6-way × 3-view | 舊穩定錨點 | [§52](#52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018) |
+| U10 pseudo pipeline | 已產品化 | [§47](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓) |
+| Aug-Plus schema / gate / promote | 已產品化 | [§53](#53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18) |
+
+---
+
+<a id="technical-spec"></a>
+## 11. 技術規格與專案骨架
+
+### 11.1 專案結構重點
+
+```text
+esg-veripromise-2026/
+├── configs/                         # YAML 配方，含 8 個 AP-D4 stem
+├── src/                             # 訓練、資料、模型、評分、推論與工具程式
+├── scripts/                         # U10、U6-pro、Aug-Plus、notebook 建構腳本
+├── assets/                          # 手工資料、術語表、prompt 資產
+├── data/                            # 官方資料與可重生 processed artifacts
+├── outputs/                         # 本機模型權重與 OOF，通常不入 git
+├── reports/                         # 實驗分析、ensemble summary、診斷報告
+├── tests/                           # metrics、post-process、Aug-Plus 單元測試
+├── README.md                        # 專案入口
+├── REPRODUCE.md                     # AP-D4 重現手冊
+└── MASTER_PLAN_AND_PROGRESS.md       # 本文件
+```
+
+### 11.2 設定檔基準
+
+主力設定由 [configs/base.yaml](configs/base.yaml) 與各 experiment YAML 遞迴 extends 組成。重要欄位如下：
+
+| 區塊 | 重要欄位 |
+| :-- | :-- |
+| `data` | `csv_path`、`text_field`、`label_fields`、`field_weights` |
+| `split` | `type=stratified_kfold`、`n_splits=5`、`stratify=[promise_status, evidence_status]` |
+| `model` | `backbone`、`max_length`、`dropout`、`pooling=cls_mean` |
+| `training` | `epochs`、`batch_size`、`grad_accum`、`lr`、`weight_decay`、`warmup_ratio`、`scheduler` |
+| `pseudo` | `pseudo_csv_path`、`stage_a_epochs`、`stage_b_epochs`、`max_pseudo` |
+| `loss` | class weights、Focal γ、task loss weights |
+
+### 11.3 環境與版本
+
+| 項目 | 記錄值 |
+| :-- | :-- |
+| Python | 3.10-3.13 可用；作者訓練環境曾為 3.13.7 |
+| PyTorch | 2.x + CUDA 12.x |
+| transformers | 4.x 到 5.x 皆有紀錄；重跑需固定環境以避免漂移 |
+| GPU | 8 GB VRAM 可跑 AP-D4 重訓，但需控制 batch/max_len |
+| PowerShell | 5.1；避免使用 `&&`，使用 `;` 或 PowerShell pipeline |
+
+---
+
+<a id="negative-results"></a>
+## 12. 負面結果與禁區
+
+| 代號 | 方向 | 結果 | 決策 |
+| :--: | :-- | :-- | :-- |
+| X1 / X1' | EMA decay 0.999 / 0.995 短訓練 | 0.473 / 0.630 級退化 | 不再嘗試無 warm-start EMA |
+| X2 / X2' | Uniform LS / T1/T3 LS | T4 或 ensemble 權重失敗 | 不作主線 |
+| X3 | LLRD 0.95 on base | 約 -0.005 | 不採納 |
+| X4 | combo_v3 multi-seed 直接替換 | 約 -0.002 | 只能並列，不可替換 |
+| X5 | macbert-large 作單模主力 | 單模不如 base | 只作 diversity，不作主力 |
+| X6 | XLM-R-base 早期同設定 | 約 0.61 | 同設定不重跑；若重試需換 teacher/策略 |
+| X7 | ELECTRA-base 同設定 | admission 0 accept | 不採納 |
+| X8 | 三視角 TTA 等權 | 較 per-task 權重差 | 不採納等權 |
+| X9 | SWA 末 K epoch 平均 | 約 -0.0031 | 不採納 |
+| X10 | T4 global re-sampling | T4 升但 T2 降，淨持平 | 不採納 global sampler |
+| X11 | NeZha / ERNIE base | 不可訓或 0.609 | 不採納 |
+| X12 | EMA 0.995 + 2 epoch warm-start | 約 -0.016 | 不採納 |
+| X13 | NLLB-600M zh-en-zh BT | 約 -0.00237 | 已被 U6-pro 取代 |
+| X14 | AP-D5 fine-grid 0.05 無向量化 | 單輪估約 3 小時，ROI 不佳 | 無向量化前不重跑 |
+
+禁區不是永久否定概念本身，而是禁止重跑同設定。若未來要解禁，必須先提出與原失敗設定不同的假設、資料、硬體或 objective。
+
+---
+
+<a id="risk-and-limits"></a>
+## 13. 結構性殘留、風險與工程上限
+
+### 13.1 主要殘留問題
+
+| 問題 | 現況 | 影響 |
+| :-- | :-- | :-- |
+| T4 Misleading 極少樣本 | 官方 train support 幾乎為 1，Aug-Plus/LLM 已補但 valid 未確認 | T4 macro-F1 是分數天花板 |
+| T2 within_2_years 少數類 | Phase 33 以 class-weighted CE 大幅改善，但仍需 hold-out 驗證 | 可能 OOF overfit |
+| OOF search overfit | AP-D4 經多輪 hillclimb | 6/03 valid 需檢查 drift |
+| 公司來源偏差 | StratifiedKFold row-level 可能有 company leakage | U11 GroupKFold sanity 用於風險估計 |
+| 外部資料分布 | U10/U6/Aug-Plus 都是外部或衍生資料 | 必須保留來源與排除規則 |
+
+### 13.2 工程上限
+
+| 上限 | 假設任務分數 | Weighted | 距 AP-D4 |
+| :-- | :-- | --: | --: |
+| 保守 | T1 0.945 / T2 0.585 / T3 0.910 / T4 0.600 | 0.7236 | +0.00752 |
+| 寬鬆 | T1 0.950 / T2 0.620 / T3 0.920 / T4 0.650 | 0.7570 | +0.04092 |
+
+保守上限距離已不大，下一步需要以 valid 校準和 submission 策略為優先，而不是盲目擴張搜尋空間。
+
+---
+
+<a id="roadmap"></a>
+## 14. 待辦事項與 ROI 排序
+
+| 優先 | ID | 項目 | 預期價值 | 風險 | 狀態 |
+| :--: | :-- | :-- | :-- | :-- | :-- |
+| 1 | F1 | 6/03 valid 校準 AP-D4/AP-D3/Phase36 | 判斷 OOF drift、選 submission anchor | 低 | 待 valid 釋出 |
+| 2 | F2 | 最終提交檔與 schema 清理 | 避免格式或約束錯誤 | 低 | 待 test 格式確認 |
+| 3 | F3 | Submission anchor 設計 | 21 次提交額度內找穩定解 | 中 | 規劃中 |
+| 4 | F4 | AP-D5 搜尋向量化、cache 或替代 optimizer | 若能降到 <30 min，可重試 fine grid | 中 | 需工程加速；無加速前不重跑 |
+| 5 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 新成員 diversity，理論上比 fine grid 更可能突破 | 中高 | 待 ROI 重估 |
+| 6 | F6 | 外部 provider LLM 合成與人工抽樣 review | 擴大 T4/T2 minority 合成來源 | 中高 | 需規則、成本與品質閘門 |
+| 7 | F7 | T4 Misleading / T2 minority 專項 | 理論上限高，但極易 overfit | 高 | 暫緩至 valid 有訊號 |
+| 8 | F8 | 跨家族 teacher / Qwen-LoRA | 可能打破同 teacher 上限 | 高 | 需更大 GPU 或新策略 |
+
+### 14.1 6/03 valid 校準清單
+
+1. 對 AP-D4、AP-D3、Phase 36 三個 anchor 跑同一套 valid scoring。
+2. 比較 OOF 與 valid 的 per-task drift，特別是 T2/T4。
+3. 檢查 post-process constraints 對 valid 的實際增益或副作用。
+4. 若 AP-D4 drift > 0.008 且 AP-D3/Phase36 更穩，submission 主線改採更穩 anchor。
+5. 將 valid 結果回寫本章與 README/REPRODUCE。
+
+### 14.2 Phase 40+ 可做事項分流
+
+| 類型 | 事項 | 啟動條件 | 決策原則 |
+| :-- | :-- | :-- | :-- |
+| 立即可做 | F4 `_eval_full` 向量化、權重 cache、Bayesian/CMA-ES 替代搜尋原型 | 不需 valid；只改搜尋效率 | 先用 AP-D4 cache 做等價性測試，確認 score 完全一致後再重跑 AP-D5 |
+| 等 valid | F1/F2/F3 valid 校準、schema 守門與 submission anchor 分配 | 2026-06-03 valid 釋出 | 優先選 valid drift 最小的 anchor，不只看 OOF 最高 |
+| 條件式重啟 | F5 stem #9 U13 LLM 評審重標 U10 | valid 顯示 AP-D4 沒有明顯 overfit，且 T4/T2 仍是主要缺口 | 新成員需先過 ensemble admission；不能只看 single-stem OOF |
+| 條件式重啟 | F6 外部 provider 合成與人工 review | 規則、成本、來源紀錄與 quality gate 都可審計 | 合成資料只補 minority；不得使用 valid/test 洩漏資訊 |
+| 暫緩 | F7 T4/T2 專項重訓 | valid 指出特定 minority 類仍可收益 | 避免 global sampler 類型的跨任務副作用 |
+| 長期 | F8 跨家族 teacher / Qwen-LoRA | 有 16 GB+ GPU 或新訓練策略 | 以結構性 diversity 為目標，不重跑已拒絕的同設定 backbone |
+
+---
+
+<a id="submission-strategy"></a>
+## 15. 提交策略與後處理守門
+
+### 15.1 提交候選 anchor
+
+| Anchor | 分數來源 | 用途 |
+| :-- | :-- | :-- |
+| AP-D4 8-way × 3-view | OOF 0.71608 | 主提交候選 |
+| AP-D3 7-way × 3-view | OOF 0.71364 | 少一個 LLM stem 的強 fallback |
+| Phase 36 6-way × 3-view | OOF 0.71018 | 較早、較穩定的 fallback |
+| Phase 18 U1-c | OOF 0.68925 | 非 U10/augmentation path 的舊 anchor |
+| baseline / combo_best | OOF 0.66734 | sanity submission，不作最終主線 |
+
+### 15.2 提交流程守門
+
+1. 產出 prediction CSV 後先跑 schema validation。
+2. 強制套用 `apply_constraints_batch`。
+3. 檢查 T1=No 的下游欄位是否全為 N/A 或空字串。
+4. 檢查 T3=No 時 T4 是否為 N/A。
+5. 保留每次提交的 config、git hash、ensemble meta、submission 檔案 hash。
+
+---
+
+<a id="reproducibility"></a>
+## 16. 可重現性規範
+
+| 項目 | 規範 |
+| :-- | :-- |
+| Seed | 所有訓練與 split 記錄 seed；AP-D4 使用 seed42 apples-to-apples |
+| Split | 5-fold index 應保存於 `data/splits/` |
+| OOF | 每個 fold 輸出 `oof_probs.npz`，集成只讀 probabilities |
+| Checkpoint | `best.pt` 與 fold log 同步保存 |
+| 外部資料 | 記錄來源 URL、company exclusion、hash、抽取與過濾規則 |
+| LLM 合成 | 記錄 provider、model、prompt、seed、quality gate、promote 結果 |
+| 報告 | 每個 Phase 至少保存 summary、分數、決策與 artifact list |
+
+---
+
+<a id="archive-policy"></a>
+## 17. 存檔與文件治理
+
+1. 舊計畫與回顧文件保留在 [docs/archive](docs/archive/)；它們是歷史證據，不作現行 SOP。
+2. 生成式實驗報告若位於 `reports/`，原則上不手動重寫，只在主文件引用重要結論。
+3. 主文件不再放日期於檔名；日期寫在文件版本資訊內。
+4. 若未來產生 Phase 40+，追加到 Part IV，不覆寫既有 Phase 證據。
+5. README 與 REPRODUCE 只保留對外與重現必要資訊，研究推理細節集中在本文件。
+
+---
+
+<a id="governance"></a>
+## 18. 規則、合規與外部資料治理
+
+### 18.1 已確認原則
+
+| 類型 | 是否可用 | 條件 |
+| :-- | :-- | :-- |
+| 官方訓練資料 | 可用 | 競賽提供 |
+| 公開永續報告書 | 可用 | 不可與官方標註公司重疊；需記錄來源 |
+| 手工撰寫樣本 | 可用 | 不可使用 valid/test 或最終預測資訊 |
+| LLM 合成樣本 | 可用 | 不可由 test/valid 洩漏；需保存 prompt、provider、gate |
+| 測試集推導資料 | 不可用 | 禁止以 test 或最終預測反推訓練資料 |
+
+完整官方裁示與原文摘要見 [§59](#59-競賽規則對外部資料的立場已確認可用)。
+
+### 18.2 實驗倫理與審計
+
+1. 所有外部資料只用於訓練集側增強與 pseudo-labeling，不可參照 test labels。
+2. 公司排除清單必須以官方 50 家為基準。
+3. LLM 合成資料需通過 schema、label consistency、SimHash 去重與 quality gate。
+4. 任何人工標註或人工撰寫資料需保留產生目的、目標類別與版本。
+
+---
+
+<a id="part-iv--完整-phase-log-append-only-evidence"></a>
+# Part IV — 完整 Phase Log (Append-only Evidence)
 
 本部分為完整訓練歷史，**append-only**（不刪除、不改寫已完成 Phase）。
 每個 Phase 包含：(a) 動機 / 設計、(b) 執行狀態、(c) 結果、(d) 結論與後續。
-失敗的 Phase 同樣保留作為禁區（X1 ~ X13）的依據。
+失敗的 Phase 同樣保留作為禁區（X1 ~ X14）的依據。
 
-═══════════════════════════════════════════════════════════════════════════════
+---
 
 ## 19. Phase 1 — 主力配置（Baseline 復現設定）
 
@@ -1991,6 +1778,7 @@ p11 ELECTRA base **不納入 active ensemble**。原因是：
 
 ---
 
+<a id="39-phase-18-完成--u1-c-任務別視角別加權-tta2026-05-05"></a>
 ## 39. Phase 18 完成 — U1-c 任務別/視角別加權 TTA（2026-05-05）
 
 **目標**：在 §38 證實「等權三視角」會稀釋 T1/T4 之後，將 TTA 由「等權」升級為「per-task 視角加權」，藉由 v12 active 14 員的 stored / middle / tail 三視角機率快取進行 coordinate descent，看能否在不重訓、不引入外部資料的條件下突破 `stored+middle` 0.68879。此為 §56.0 排序中的 A1（最高 ROI 的零再訓練實驗）。
@@ -2094,6 +1882,7 @@ p11 ELECTRA base **不納入 active ensemble**。原因是：
 
 ---
 
+<a id="41-競賽-active-軌跡tta-path"></a>
 ## 41. Phase 20：U12 OOF cross-fold variance（read-only 診斷，2026-05-05）
 
 ### 41.1 動機
@@ -2425,6 +2214,7 @@ seeds: [42]
 
 ---
 
+<a id="47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓"></a>
 ## 47. U10 — 企業永續報告書 (SR) 弱監督 pipeline 完整版（2026-05-09 重啟，2026-05-10 v2 重訓）
 
 > **章節定位**：本章把 §47 從「散裝進度紀錄」重構為**架構完整、每段都講清楚說明白**的工程規格。Phase 26~30 失敗教訓 → 重啟原則 → 5-stage pipeline → 兩版 (v1/v2) 演進 → 最終 OOF SOTA = **0.67746**（baseline +0.01012，45-ckpt 三方 stack）→ 結構性殘留與後續路徑。命名一律使用 `u10`（不再 `u10new`）。
@@ -2646,6 +2436,7 @@ seeds: [42]
 
 per-task 平均（v2 single config 訓練端 OOF）：T1=0.9354 / T2=0.4839 / T3=0.8598 / T4=0.4299。
 
+<a id="477-m6-oof-ensemble--new-sota--067746baseline-001012"></a>
 ### 47.7 M6 OOF Ensemble — **NEW SOTA = 0.67746**（baseline +0.01012）
 
 **Ensemble 工具**：`src/tools/oof_ensemble.py`，對指定 experiment 列表的 per-row OOF softmax 做等權平均後重新 argmax，計算 task macro-F1 與 weighted score。
@@ -2958,13 +2749,15 @@ per-task α* (stored / middle / tail)：
 ### 51.3 對 §15 待辦的影響
 
 - **#3 / #4 / #4b**： 全數完成且超預期（原預估 5-way hillclimb +0.005~+0.015，實際 +0.00573；multi-view 預估 +0.005~+0.010，實際 +0.00189，邊際遞減符合預期）。
-- **#5 U6 backtranslate 專業化升級**： **完成（2026-05-10）**。實作 `scripts/u6_backtranslate_pro.py`（NLLB-200-distilled-600M + 109 詞 ESG glossary + 2 pivot en/ja × 3 temperature + char-only ChrF + glossary post-correction + translation-memory cache）；485 minority sources → **434 aug records**；訓練成 stem #6 `p2_combo_best_classw_focal_u6pro`（CV mean=0.67044）；6-way × 3-view per-task TTA → **0.71018 NEW SOTA**（+0.00260 vs Phase 35）。詳見 [§52](#52-u1--u12-backlog-完成狀態)。
+- **#5 U6 backtranslate 專業化升級**： **完成（2026-05-10）**。實作 `scripts/u6_backtranslate_pro.py`（NLLB-200-distilled-600M + 109 詞 ESG glossary + 2 pivot en/ja × 3 temperature + char-only ChrF + glossary post-correction + translation-memory cache）；485 minority sources → **434 aug records**；訓練成 stem #6 `p2_combo_best_classw_focal_u6pro`（CV mean=0.67044）；6-way × 3-view per-task TTA → **0.71018 NEW SOTA**（+0.00260 vs Phase 35）。詳見 [§52](#52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018)。
 - **#6 跨家族 teacher**：仍為 plateau 解鎖手段；硬體與時間成本最高，留作 6/11 LB 釋出後的決勝牌。
 - **#7 valid 校準**：6/03 必執行。
 - **預測檔已輸出**：`reports/analysis/_ensemble/u10_5way_3view_tta_preds.csv`（1000 列 × 4 task probs/labels），可直接用於 §15 #8 提交策略的第 5 個錨點。
 
 ---
 
+<a id="52-u1--u12-backlog-完成狀態"></a>
+<a id="52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018"></a>
 ## 52. Phase 36 — U6-pro back-translation + stem #6 + 6-way × 3-view TTA — NEW SOTA 0.71018
 
 > 接續 §50 / §51。本節記錄 §15 item #5「U6 backtranslate 專業化升級」的完整落地：自建 ESG 術語表、防幻覺多 pivot 回譯、品質過濾、術語後校正、stem #6 訓練、6-way × 3-view per-task TTA 與新 SOTA 結果。
@@ -3129,6 +2922,7 @@ per-task α* (stored / middle / tail)：
 
 ---
 
+<a id="53-phase-37--aug-plus-hand-crafted-minority-訓練與-single-stem-ablation2026-05-18"></a>
 ## 53. Phase 37 — Aug-Plus hand-crafted minority 訓練與 single-stem ablation（2026-05-18）
 
 > **狀態**：完整 5-fold 訓練已正確結束，OOF score_summary.json 已寫出。
@@ -3137,7 +2931,7 @@ per-task α* (stored / middle / tail)：
 ### 53.1 動機
 
 - 2026-05-17 主辦方明文裁示「自行查詢/標註之資料擴增」允許（規則摘錄詳 [§59](#59-競賽規則對外部資料的立場已確認可用)）。
-- Phase 36 OOF 0.71018 之 task-level 殘留 bottleneck：T2 verification_timeline ≈ 0.55，T4 evidence_quality ≈ 0.43（[§7](#7-結構性殘留與工程上限)）；對應 within_2_years / between_2_5_years / Misleading 等 minority class 在官方 1,000 列僅占 1~3%。
+- Phase 36 OOF 0.71018 之 task-level 殘留 bottleneck：T2 verification_timeline ≈ 0.55，T4 evidence_quality ≈ 0.43（[§13](#risk-and-limits)）；對應 within_2_years / between_2_5_years / Misleading 等 minority class 在官方 1,000 列僅占 1~3%。
 - 設計**Aug-Plus（AP）模組**：以 50 列人手撰寫、富 T2/T4 minority class 之繁中陳述作為「種子」，融入既有 U10v2 偽標 pool，量測單 stem 效果並準備未來 LLM 擴增之骨架。
 
 ### 53.2 模組架構（AP1~AP5）
@@ -3281,6 +3075,7 @@ per-task α* (stored / middle / tail)：
 - `reports/analysis/_ensemble/ap_d1_7way_meta.json`（7-way 最終權重 JSON）
 - `reports/analysis/_ensemble/ap_d1_6way_baseline_meta.json`（6-way baseline 權重 JSON）
 
+<a id="5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18"></a>
 ### 53.12 AP-D3 結果 — 7-way × 3-view per-task TTA → **NEW SOTA 0.71364**（2026-05-18）
 
 > **單行結論**：把 §53.11 的 7-way per-task hillclimb 接上 **3-view TTA**（stored / middle / tail），於 seed42-only 設定下取得 **0.71364**，apples-to-apples 較 6-way × 3-view × seed42（**0.71018**）淨增 **+0.00346**，也超越 Phase 36 公開 SOTA（**0.71018**，[§52](#52-phase-36--u6-pro-back-translation--stem-6--6-way--3-view-tta--new-sota-071018)）+0.00346，**確立新 SOTA**。
@@ -3334,6 +3129,7 @@ per-task α* (stored / middle / tail)：
 - `reports/analysis/_ensemble/ap_d3_6way_3view_baseline_meta.json`（baseline 對照）
 
 
+<a id="54-phase-37-並行路線--u13llm-合成--人工標註--llm-評審規劃中llm-合成已於-55-落地"></a>
 ## 54. Phase 37 並行路線 — U13：LLM 合成 + 人工標註 + LLM 評審（規劃中／LLM-合成已於 §55 落地）
 
 > **更新 2026-05-20**：本章三路策略中，**路線 1（LLM 合成）已於 [§55 Phase 38](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) 用本機 Ollama qwen2.5:7b-instruct 完成最小可行集（MVP）**，作為 stem #8 訓練資料推進 AP-D4 → NEW SOTA 0.71608。本章餘下兩路（人工標註模板、LLM 評審）仍在規劃，待 ROI 重估後再決定是否啟動。
@@ -3456,13 +3252,13 @@ python scripts/u13_manual_seed.py emit --output data/processed/u13/manual_templa
 |---|---|
 | LLM 合成樣本「太規律」、模型過擬合表面 pattern | 多 provider 混用 + 高溫 0.85 + 主題種子輪替 30+ 個 |
 | 合成樣本與測試集分佈不符 | confidence=0.95 < 1.0；Stage B fine-tune 仍只用真實資料 |
-| LLM 偶發 hierarchy 違反 | ssert_labels_valid 於 promote 階段攔截，違者直接丟棄 |
+| LLM 偶發 hierarchy 違反 | `assert_labels_valid` 於 promote 階段攔截，違者直接丟棄 |
 | 重複生成 | stable_synth_id (blake2b hash) 保證 idempotent + SimHash-lite dedup |
 | 官方規則解讀錯誤 | 已截圖保存群組訊息；ID 命名空間明確隔離；可逆（合成資料皆在 data/processed/u13/） |
 
 ### 54.9 測試覆蓋
 
-	ests/test_u13_synth.py 12 個測試全綠：
+`tests/test_u13_synth.py` 12 個測試全綠：
 - schema 對齊 U10
 - hierarchy 4 種合法 + 3 種非法
 - stable_id 決定性
@@ -3473,28 +3269,19 @@ python scripts/u13_manual_seed.py emit --output data/processed/u13/manual_templa
 
 pytest tests/test_u13_synth.py -v → **12 passed in 6.61s**
 
-### 54.10 待辦（下一輪）
+### 54.10 狀態更新與剩餘候選
 
-1. 取得 OpenAI / Anthropic API key 後跑真實生成 (~300 樣本，預估 \.10 ~ \.50 成本)
-2. 人工 review LLM 輸出抽樣 30 筆，計算標籤命中率 (target ≥ 85%)
-3. 跑 exp_p2_combo_best_classw_focal_u13_synth.yaml 完整 5-fold × 3-seed 訓練
-4. 比對 Phase 36 vs Phase 37 各 task F1，產出 MASTER_PLAN §58 Phase 37 結果報告
-5. 若 OOF ≥ 0.75，產生最終提交檔 + 更新 inal_summary/
+> 原始 U13 下一輪待辦中，LLM 合成 MVP 已於 [§55 Phase 38](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) 以本機 Ollama 完成，並作為 stem #8 推進 AP-D4 至 0.71608。下列僅保留仍有參考價值、但尚未採納為主線的候選。
+
+1. OpenAI / Anthropic 等外部 provider 仍可作為更大規模合成來源；重啟前需重新檢查規則、成本、資料隔離與 quality gate，且 ROI 必須高於現行 AP-D4。
+2. 人工 review LLM 輸出抽樣 30 筆仍有價值，目標是估算標籤命中率是否達 85% 以上。
+3. `exp_p2_combo_best_classw_focal_u13_synth.yaml` 原本的完整 5-fold × 3-seed 路線未直接採納；若重啟，應與 Phase 38 `aug_plus_v2` 資料路線合併設計。
+4. Phase 37 / Phase 38 task-level 結果已分別寫入 [§53.12](#5312-ap-d3-結果--7-way--3-view-per-task-tta--new-sota-0713642026-05-18) 與 [§55](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20)，不再另建 Phase 37 結果報告。
+5. `final_summary/` 僅在 valid/test 校準後、確定提交 anchor 時更新。
 
 ---
 
----
-
-
-═══════════════════════════════════════════════════════════════════════════════
-
-# Part V — 附錄 (Appendix)
-
-本部分為支援性詳表：Backlog 全紀錄、工程上限推導、外部資料合規立場。
-日常閱讀無需深入，僅在需要查證 D-編號、X-編號、上限數字、合規條款時翻閱。
-
-═══════════════════════════════════════════════════════════════════════════════
-
+<a id="55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20"></a>
 ## 55. Phase 38 — Ollama LLM-synth + stem #8 + AP-D4 → **NEW SOTA 0.71608**（2026-05-20）
 
 > **位置說明**：本章為 Phase 38 獨立章節，概念上是 §53 (Phase 37 Aug-Plus) 與 §54 (Phase 37 並行 U13 計畫) 的受驗證路線——以本機 Ollama 低成本 實現 §54.2 「LLM 合成」計畫的最小可行集（MVP），並接上 §53.12 AP-D3 集成框架推進為 8-way AP-D4。
@@ -3624,9 +3411,9 @@ py -3.13 -m src.tools.u10_per_task_tta `
 
 | 配置 | 預估時間 | 預期 Δscore | 性價比（Δ/h）| 採納？|
 |------|----------|--------------|---------------|------|
-| AP-D4 baseline（grid 0.1, max-r=4, joint=2）| ≈35 min | +0.00244（vs AP-D3 0.71364）| +0.0042/h | ✅ 採納為當前 SOTA |
-| AP-D5 grid 0.05, max-r=1, joint=0 | ≈3 h | +0.0005~0.001（§55.6 預估）| +0.00017~0.00033/h | ❌ 不採納（性價比比 AP-D4 差 12-25 倍）|
-| AP-D5 grid 0.05, max-r=4, joint=2 | ≈10-15 h | +0.001~0.002 | +0.0001~0.0002/h | ❌ 不採納 |
+| AP-D4 baseline（grid 0.1, max-r=4, joint=2）| ≈35 min | +0.00244（vs AP-D3 0.71364）| +0.0042/h | 採納為當前 SOTA |
+| AP-D5 grid 0.05, max-r=1, joint=0 | ≈3 h | +0.0005~0.001（§55.6 預估）| +0.00017~0.00033/h | 不採納（性價比比 AP-D4 差 12-25 倍）|
+| AP-D5 grid 0.05, max-r=4, joint=2 | ≈10-15 h | +0.001~0.002 | +0.0001~0.0002/h | 不採納 |
 
 **結論**：在無 GPU 加速、無 vectorized batch eval 的當前實作下，AP-D4 grid 0.1 是時間/收益的甜蜜點。要突破此甜蜜點，需先做的工程動作見 §56.6。
 
@@ -3655,14 +3442,24 @@ py -3.13 -m src.tools.u10_per_task_tta `
 - 本章節（Phase 39 紀錄）。
 - **無 OOF / 無 ckpt / 無 summary.csv**：本 Phase 不修改任何模型或 ensemble 產出。
 
+---
+
+<a id="part-v--附錄-appendix"></a>
+# Part V — 附錄 (Appendix)
+
+本部分為支援性詳表：Backlog 全紀錄、工程上限推導、外部資料合規立場。
+日常閱讀無需深入，僅在需要查證 D-編號、X-編號、上限數字、合規條款時翻閱。
+
+---
+
 ## 57. Backlog 詳表（D1 ~ D30 + U1 ~ U12 全紀錄）
 
 > 本節為歷史審計用詳表。D 系列（D1~D30）為已完成的工程動作流水，U / N 系列（U1~U12 / N1~N3）為原始 backlog 候選清單。
 > X1~X14 禁區另列於 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)。
 
-### 57.1 已完成項目（Done — 含成果）
+### 57.1 已完成項目（D 系列與 U/N 系列）
 
-> 截至 Phase 25 共 30 項主要工程動作（D1~D30）；下列以時間順序，並標註對 SOTA 軌跡的貢獻。
+> D 系列為早期工程動作流水，編號停在 D30；Phase 26 之後的 U10、AP-D3、AP-D4 與 Phase 39 決策以各 Phase 章節為主紀錄。下列 D 表保留時間順序與對 SOTA 軌跡的貢獻。
 
 | # | 項目 | 階段 | 結果 | 對 SOTA 增益 |
 | :--: | :-- | :--: | :--: | :--: |
@@ -3696,7 +3493,8 @@ py -3.13 -m src.tools.u10_per_task_tta `
 | D28 | C1 / N3 — NeZha-base 不可訓（fallback 到 BertModel，fold0 0.549 中止）；轉 ERNIE-3.0-base-zh fallback，5 折 mean **0.6086** << 0.66 admission 門檻 | Phase 23 | NeZha：fold0 0.549 中止；ERNIE：0.6086（T2 −0.107、T4 −0.073 vs baseline）；**N3 candidate 全數失敗，不入池** | 0（拒絕）；列入 X11 風險區（base-class 異源 backbone 對本資料集不利） |
 | D29 | U2 / B3 — `p2_combo_best_ema995_warm` EMA decay=0.995 + warm-start 2 epoch（trainer.py 新增 `ema_warmup_epochs` + `ema_started`） | Phase 24 | member-level OOF **0.64941** vs baseline 0.66558（**−0.01617**）；T4 退化最嚴重（−0.062）；5 折全退化；未過 admission **不入 v12 池** | 0（拒絕）；列入 X12 風險區（EMA + warm-start 在 cosine 末段 LR ≠ 0 + 短訓練下仍傷 T4 macro） |
 | D30 | U6 / B4 — `p2_combo_best_u6_bt` NLLB-200-distilled-600M 中→英→中 回譯（T2 within_2_years×3 + T4 Misleading×5 / Not Clear×1；138 唯一源員 → 168 增強樣本；src/train_kfold.py 新增 aug 載入 / per-fold 注入機制，oof / valid 不收 aug） | Phase 25 | member-level OOF **0.66321** vs baseline 0.66558（**−0.00237**）；T2 macro 0.4652（−0.014）、T4 macro 0.4276（−0.031）；上加 fold1 轉譯品質離群（score 0.6334）拉低均值；未過 admission **不入 v12 池** | 0（拒絕）；列入 X13 風險區（NLLB-600M 保真度不足 + 無 round-trip ChrF 過濾 + 譯本帶入 label-noise） |
-#### 56.1.1 已完成 backlog 項目對照（U / N 系列）
+<a id="571-已完成項目done--含成果"></a>
+#### 57.1.1 U/N 系列完成項目與成果
 
 > 補充 D 表之外、以 U / N 編號追蹤的項目。X1~X13 禁區詳 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)。
 
@@ -3712,32 +3510,37 @@ py -3.13 -m src.tools.u10_per_task_tta `
 | U11 | StratifiedGroupKFold by company sanity | 完成（診斷） | §40 |
 | U12 | OOF cross-fold variance | 完成（診斷；valid gap 待 6/03 釋出） | §41 |
 
-### 57.2 未完成項目（TODO）
+### 57.2 未完成或可重啟項目（TODO / Candidate）
 
-> 截至 2026-05-10，原 backlog 中僅 U8 / U9 仍處於暫緩或阻塞狀態；其餘已完成項目（含採納與拒絕）詳 [§57.1](#571-已完成項目done--含成果)。
-> 下表整合「暫緩 / 阻塞 backlog」與「下一輪可動執行路線」兩類，皆為尚未完成之項目。
+> 本節已依 Phase 39 後狀態校訂。2026-05-10 版 backlog 中的 U10 TTA、class-weighted CE / Focal-T4、M3-v3 corpus 與 AP-D 路線已分別在 §47~§56 完成、採納或拒絕；下列只保留截至 2026-05-25 仍未完成、等待外部事件，或可在新條件下重啟的項目。
 
-#### 56.2.1 暫緩 / 阻塞 backlog
+#### 57.2.1 等待 valid/test 的必要動作
 
-| ID | 項目 | 狀態 | 阻塞原因 |
-| :--: | :-- | :-- | :-- |
-| U8 | Pipeline B-Plan T1 → T3 → T2/T4 串接 | 暫緩 | 待 U10 結果與 valid gap 釋出後再評估 ROI |
-| U9 | Qwen2.5-7B LoRA 4-bit r=16 | 阻塞 | RTX 5060 Laptop 8 GB 不足，需 16 GB+ 顯存 |
+| ID | 項目 | 狀態 | 啟動條件 | 產出 |
+| :--: | :-- | :-- | :-- | :-- |
+| F1 | AP-D4 / AP-D3 / Phase36 valid 校準 | 待辦 | 2026-06-03 valid 釋出 | valid score、per-task drift、submission anchor 建議 |
+| F2 | 最終提交檔 schema 與 hierarchy 守門 | 待辦 | test 格式或官方範例確認 | submission validator、約束檢查紀錄 |
+| F3 | Submission anchor 分配策略 | 待辦 | valid 校準後 | 21 次提交額度的主線與 fallback 順序 |
 
-#### 56.2.2 下一輪可動執行路線（v3.0 校訂 2026-05-10）
+<a id="5622-下一輪可動執行路線v30-校訂-2026-05-10"></a>
+#### 57.2.2 可做但需前置條件的 Phase 40+ 候選
 
-> 排序原則：(a) 兩條 SOTA 軌跡合流優先；(b) 結構性殘留次之；(c) 外部資源依賴最後。
+| ID | 名稱 | 就緒度 | 重訓 | 前置條件 | 決策原則 |
+| :--: | :-- | :-- | :--: | :-- | :-- |
+| F4 | AP-D5 搜尋向量化 / cache / Bayesian 或 CMA-ES | 可立即做工程原型 | 否 | 先證明 AP-D4 score 等價；將 grid 0.05 降到 <30 min | 無加速前不重跑 X14 同設定 |
+| F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 待設計 | 是 | valid 顯示 AP-D4 未 overfit，且 T4/T2 仍為缺口 | 需過 ensemble admission，不以 single-stem OOF 判斷 |
+| F6 | 外部 provider LLM 合成 + 人工抽樣 review | 待資源與規則審計 | 是 | provider、prompt、來源紀錄、quality gate 完整 | 只補 minority，不使用 valid/test 洩漏資訊 |
+| F7 | T4 Misleading / T2 minority 專項重訓 | 暫緩 | 可能 | valid 顯示特定 minority 類仍可收益 | 避免 global sampler 對其他任務造成副作用 |
+| F8 | 跨家族 teacher / Qwen-LoRA | 阻塞 | 是 | 16 GB+ GPU 或新訓練策略 | 不重跑已拒絕的 XLM-R / ELECTRA / NeZha / ERNIE 同設定 |
 
-| 排序 | ID | 名稱 | 就緒度 | 重訓 | 預期增益 | 主要風險 |
-| :--: | :-- | :-- | :-- | :--: | :-- | :-- |
-| 1 | TTA on U10 | 把 U10 45 ckpt 餵入 U1-c per-task TTA aggregator | 立即可做 | 否 | ≥ +0.0005 | 低 |
-| 2 | Class-weighted CE / Focal-T4 γ=3.0 | 在 U10 v2 偽標資料上重訓，目標恢復 within_2_years / Misleading 預測能力 | 配置就緒 | 是（30 ~ 45 ckpt） | T2 / T4 各 +0.005 ~ +0.015 | 中 |
-| 3 | M3-v3 corpus 再擴張 | 放寬至 30 ≤ len ≤ 1200、移除 TOC space-ratio 規則 | 設計完成、未執行 | 否（純 M3） | +0.001 ~ +0.003 | 中 |
-| 4 | 跨家族 teacher（XLM-R / Qwen-LoRA） | X18 上限定理只適用同 teacher；換 backbone 解鎖新 plateau | 待設計 | 是 | 待測 | 高（硬體 / 跨模） |
-| 5 | 6/03 valid 釋出後 OOF↔Valid gap 重驗 + GroupKFold drift 復量 | 校準現有所有增益是否為虛增益 | 已就緒（§40 / §41） | 否 | 0（診斷） | 低 |
-| 6 | 提交策略 | 定義 baseline / U1-c / v12 / U10 stack 四個提交點 | 待規劃 | 否 | LB 對齊 | 低 |
+#### 57.2.3 歷史暫緩 / 阻塞 backlog
 
-> **禁區提醒**：X1 ~ X13 詳見 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)，本輪嚴格遵守。
+| ID | 項目 | 狀態 | 阻塞原因 | 現行處理 |
+| :--: | :-- | :-- | :-- | :-- |
+| U8 | Pipeline B-Plan T1 → T3 → T2/T4 串接 | 暫緩 | 需 valid gap 與 error pattern 支持 | 若 valid 顯示 hierarchy error 是主因再重啟 |
+| U9 | Qwen2.5-7B LoRA 4-bit r=16 | 阻塞 | RTX 5060 Laptop 8 GB 不足，需 16 GB+ 顯存 | 併入 F8 長期路線 |
+
+> **禁區提醒**：X1 ~ X14 詳見 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)，本輪嚴格遵守。
 
 ### 57.3 已暫緩或證明不可行的方向（避免重複嘗試）
 
@@ -3763,7 +3566,7 @@ py -3.13 -m src.tools.u10_per_task_tta `
 
 > 本節說明本專案聲稱的「加權保守上限 ≈ 0.7236 / 加權寬鬆上限 ≈ 0.7570」是如何得出的。
 > 包含兩種上限的定義、per-task 拆解推導，以及 T4 `Misleading` (support=1) 為何構成統計硬上限。
-> 與「如何突破上限」相關的執行路線見 [§56.2.2 下一輪可動執行路線](#5622-下一輪可動執行路線v30-校訂-2026-05-10)。
+> 與「如何突破上限」相關的執行路線見 [§57.2.2 下一輪可動執行路線](#5622-下一輪可動執行路線v30-校訂-2026-05-10)。
 
 ### 58.1 兩種上限的定義
 
@@ -3773,7 +3576,9 @@ py -3.13 -m src.tools.u10_per_task_tta `
 
 ### 58.2 per-task 上限拆解（推導依據）
 
-| Task | 目前 (Phase 14 v12) | 估計上限 | 缺口 | 上限依據 |
+> 注意：本節原始估算建立於 Phase 18 active path 時代，保留作為歷史工程上限推導。Phase 38 AP-D4 已把 weighted score 推進至 0.71608，且 T2 已高於早期寬鬆估計；因此本節不再視為嚴格上限，而是用來說明「分數天花板主要由 T4 與少數類統計變異決定」的推導脈絡。
+
+| Task | 早期參考值 | 估計上限 | 缺口 | 上限依據 |
 | :-- | :--: | :--: | :--: | :-- |
 | T1 promise (binary F1) | 0.9405 | 0.94 ~ 0.95 | 0 ~ +0.010 | binary 任務、support 平均；macbert-large 單模也可達 0.928；IAA 上限約 0.95（已接近）|
 | T2 timeline (macro 5 類) | 0.5087 | 0.55 ~ 0.62 | +0.041 ~ +0.111 | `already ↔ between_2_and_5_years` 混淆仍是主因；T6 兩版本未直擊，需資料擴增或更不同的模型家族 |
@@ -3781,10 +3586,11 @@ py -3.13 -m src.tools.u10_per_task_tta `
 | T4 quality (macro 4 類) | 0.4592 | 0.55 ~ 0.65 | +0.091 ~ +0.191 | `Misleading` (support=1) 數學上單類錯誤會重壓 macro；理論天花板 ≈ 0.60 ~ 0.65 |
 | **加權保守上限** | — | **≈ 0.7236** | — | 0.20·0.945 + 0.15·0.585 + 0.30·0.910 + 0.35·0.600 |
 | **加權寬鬆上限** | — | **≈ 0.7570** | — | 0.20·0.95 + 0.15·0.62 + 0.30·0.92 + 0.35·0.65 |
-| **目前實測（active TTA path）** | **0.68925** | — | **0.034 ~ 0.068** | [Phase 18](#39-phase-18-完成--u1-c-任務別視角別加權-tta2026-05-05) U1-c per-task TTA；競賽 active SOTA |
-| **目前實測（U10 best.pt path）** | **0.67746** | — | **0.046 ~ 0.080** | [Phase 31](#477-m6-oof-ensemble--new-sota--067746baseline-001012) baseline + v1 + v2 stack（45 ckpt）；尚未經 TTA 合流 |
+| **歷史實測（active TTA path）** | **0.68925** | — | **0.034 ~ 0.068** | [Phase 18](#39-phase-18-完成--u1-c-任務別視角別加權-tta2026-05-05) U1-c per-task TTA；已被後續 U10/AP 路線超越 |
+| **歷史實測（U10 best.pt path）** | **0.67746** | — | **0.046 ~ 0.080** | [Phase 31](#477-m6-oof-ensemble--new-sota--067746baseline-001012) baseline + v1 + v2 stack（45 ckpt）；後續已合流至 AP-D4 |
+| **目前實測（AP-D4）** | **0.71608** | — | **距早期保守目標 0.7236 尚差約 0.00752** | [Phase 38](#55-phase-38--ollama-llm-synth--stem-8--ap-d4--new-sota-0716082026-05-20) 8-way × 3-view per-task TTA |
 
-→ 「**0.72 ~ 0.74**」這個區間即由此而來。兩條 SOTA 軌跡尚未合流，下一步「TTA on U10 ckpt」見 [§15](#8-待辦事項roi-排序) 與 [§47.12 路徑 1](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓)。
+→ 「**0.72 ~ 0.74**」這個區間為早期工程估計；Phase 38 AP-D4 已接近或超過部分早期假設，後續需以 [§14](#roadmap) 的 valid 校準與提交策略重新定義下一階段目標。U10 路線詳見 [§47.12](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓)。
 
 ### 58.3 為什麼 T4 `Misleading` (support=1) 是真正的硬上限？
 
@@ -3829,6 +3635,6 @@ T4 的 label domain 是 4 類（Clear / Not Clear / Misleading / N/A）。macro-
 
 - U10 已於 2026-05-09 重啟、2026-05-10 完成 v2 重訓；採「來源同質性 + 50 家排除 + 兩階段隔離訓練」三條鐵律（詳 [§47.0](#470-設計原則與失敗教訓)）。
 - 實測 best.pt path 增益 +0.01012（baseline 0.66734 → stack 0.67746）；對 minority class T2 timeline 與 T4 quality 提供可量測覆蓋改善。
-- 殘留結構性問題（T2 within_2_years / T4 Misleading 仍 0）為 baseline class collapse，需 [§15](#8-待辦事項roi-排序) 路徑 2 的 class-weighted CE / Focal-T4 重訓處理。
+- 殘留結構性問題（T2 within_2_years / T4 Misleading 仍 0）為 baseline class collapse，後續需依 [§14](#roadmap) 的 valid 訊號決定是否再啟動 class-weighted CE / Focal-T4 專項。
 - 偽標噪聲與分布偏移風險已透過兩階段訓練隔離；不得將 pseudo 視為人工標註真值。
 
