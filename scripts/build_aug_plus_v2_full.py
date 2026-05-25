@@ -2,11 +2,11 @@
 
 Background
 ----------
-Phase 38 (§55 in MASTER_PLAN_AND_PROGRESS_20260518.md) intended to merge
+Phase 38 (§55 in MASTER_PLAN_AND_PROGRESS.md) intended to merge
 ``data/aug_plus/llm_synth_misleading.jsonl`` (80 rows) +
 ``data/aug_plus/llm_synth_within_2_years.jsonl`` (60 rows) into the v1
 hand-crafted aug-plus pool to produce ``aug_plus_v2_with_u10v2.csv``. A
-post-hoc audit (2026-05-21) discovered that the actually committed
+post-hoc audit (2026-05-21) discovered that the local historical
 ``data/processed/aug_plus/aug_plus_v2_with_u10v2.csv`` is byte-identical to
 ``aug_plus_v1_with_u10v2.csv`` (md5 = 2246df4f387ef21c866c148f15650121). The
 LLM-synth jsonl files were generated correctly by ``ap_llm_synth.py``, but
@@ -17,9 +17,9 @@ stem #7 (``p2_combo_best_aug_plus``); the ensemble gain AP-D3 → AP-D4
 (+0.00244) came from non-deterministic CUDA re-run variance acting as an
 extra ensemble degree of freedom rather than from the alleged LLM samples.
 
-Why this script does NOT overwrite the committed v2 CSV
--------------------------------------------------------
-The committed
+Why this script does NOT overwrite the historical v2 CSV
+--------------------------------------------------------
+The historical local/processed
 ``data/processed/aug_plus/aug_plus_v2_with_u10v2.csv`` is the *exact* file
 that produced the stored stem #8 OOF probabilities and therefore the
 SOTA ensemble score 0.71608. Overwriting it would silently invalidate the

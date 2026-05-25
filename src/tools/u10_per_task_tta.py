@@ -1,11 +1,13 @@
-"""U10 per-task / per-view weighted TTA over the 3-stem U10 stack.
+"""Per-task / per-view weighted TTA over U10 and AP-D stem stacks.
 
-Stems (each = 3 seeds x 5 folds = 15 ckpts):
+Default U10 stems (each = 3 seeds x 5 folds = 15 ckpts):
   - p2_combo_best                  (baseline, no pseudo)
   - p2_combo_best_u10_pseudo       (U10 v1 pseudo, 211 rows)
   - p2_combo_best_u10_pseudo_v2    (U10 v2 pseudo, 3,904 rows)
 
-Existing equal-weight stack (3 stems x 3 views=stored only) = 0.67746.
+Use ``--stems`` to override this default for AP-D3/AP-D4/AP-D5 style stacks.
+
+Existing equal-weight stack (3 stems, stored view only) = 0.67746.
 
 This tool searches:
 
@@ -13,6 +15,9 @@ This tool searches:
   2. Per-task per-view alpha weights a_{t,v} (v in {stored,middle,tail}, sum=1).
 
 Two-stage coordinate descent on disjoint simplices keeps the search cheap.
+The scoring path uses ``FastTTAEvaluator`` for exact post-constraint scoring
+with cached probability tensors; ``_eval_full_reference`` remains as a slow
+auditable fallback for tests.
 Saves results to ``reports/analysis/_ensemble``:
 
     u10_per_task_tta_summary.csv
@@ -23,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +41,7 @@ from src.data.loader import load_dataset
 from src.eval.metrics import weighted_score
 from src.inference.post_process import apply_constraints_batch
 from src.tools.oof_ensemble import _build_seed_oof
+from src.tools.tta_fast_eval import FastTTAEvaluator
 from src.tools.u1_tta_oof import predict_one_view
 
 
@@ -42,6 +49,7 @@ U10_STEMS = ("p2_combo_best", "p2_combo_best_u10_pseudo", "p2_combo_best_u10_pse
 VIEWS = ("stored", "middle", "tail")
 CACHE_DIR = Path("outputs/cache/u10_tta")
 OUTPUT_DIR = Path("reports/analysis/_ensemble")
+REFERENCE_SOTA_SCORE = 0.71608
 
 
 def _stored_probs_for_stem(stem: str, n: int) -> dict[str, np.ndarray]:
@@ -181,16 +189,120 @@ def _mix_views(
     return out
 
 
-def _eval_full(
+def _eval_full_reference(
     *,
     per_stem_per_view: dict[str, dict[str, dict[str, np.ndarray]]],
-    stem_weights_per_task: dict[str, tuple[float, float, float]],
+    stem_weights_per_task: dict[str, tuple[float, ...]],
     view_alpha_per_task: dict[str, tuple[float, float, float]],
     records: list[dict[str, Any]],
 ) -> tuple[dict[str, float], list[dict[str, Any]]]:
     pv = _mix_stems(per_stem_per_view=per_stem_per_view, stem_weights_per_task=stem_weights_per_task)
     final = _mix_views(per_view=pv, view_alpha_per_task=view_alpha_per_task)
     return _score(final, records)
+
+
+def _eval_full(
+    *,
+    per_stem_per_view: dict[str, dict[str, dict[str, np.ndarray]]],
+    stem_weights_per_task: dict[str, tuple[float, ...]],
+    view_alpha_per_task: dict[str, tuple[float, float, float]],
+    records: list[dict[str, Any]],
+    evaluator: FastTTAEvaluator | None = None,
+) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    if evaluator is None:
+        evaluator = FastTTAEvaluator(
+            per_stem_per_view=per_stem_per_view,
+            records=records,
+            stems=U10_STEMS,
+            views=VIEWS,
+        )
+    return evaluator.score_and_predictions(
+        stem_weights_per_task=stem_weights_per_task,
+        view_alpha_per_task=view_alpha_per_task,
+    )
+
+
+def _move_simplex_mass(weights: tuple[float, ...], *, step: float, rng: random.Random) -> tuple[float, ...]:
+    if len(weights) < 2 or step <= 0.0:
+        return weights
+    vals = list(weights)
+    donors = [idx for idx, value in enumerate(vals) if value >= step - 1e-12]
+    if not donors:
+        return weights
+    donor = rng.choice(donors)
+    receivers = [idx for idx in range(len(vals)) if idx != donor]
+    receiver = rng.choice(receivers)
+    vals[donor] = max(0.0, vals[donor] - step)
+    vals[receiver] += step
+    total = sum(vals)
+    if total <= 0.0:
+        return weights
+    return tuple(round(value / total, 10) for value in vals)
+
+
+def random_refine_search(
+    *,
+    evaluator: FastTTAEvaluator,
+    init_stem: dict[str, tuple[float, ...]],
+    init_alpha: dict[str, tuple[float, float, float]],
+    n_iters: int,
+    step: float,
+    seed: int,
+    stem_probability: float = 0.75,
+) -> tuple[
+    dict[str, tuple[float, ...]],
+    dict[str, tuple[float, float, float]],
+    dict[str, float],
+    list[dict[str, Any]],
+]:
+    """Budgeted local search over adjacent simplex points.
+
+    This is meant for AP-D5-style follow-up searches where exhaustive 0.05
+    grids are too expensive with 8+ stems. It never accepts a candidate unless
+    the exact post-constraint weighted score improves.
+    """
+    rng = random.Random(seed)
+    best_stem = {task: tuple(init_stem[task]) for task in TASKS}
+    best_alpha = {task: tuple(init_alpha[task]) for task in TASKS}
+    best_score = evaluator.score(stem_weights_per_task=best_stem, view_alpha_per_task=best_alpha)
+    history: list[dict[str, Any]] = []
+
+    for iteration in range(1, n_iters + 1):
+        candidate_stem = dict(best_stem)
+        candidate_alpha = dict(best_alpha)
+        task = rng.choice(TASKS)
+        group = "stem" if rng.random() < stem_probability else "view"
+        if group == "stem":
+            candidate_stem[task] = _move_simplex_mass(best_stem[task], step=step, rng=rng)
+            if candidate_stem[task] == best_stem[task]:
+                continue
+        else:
+            candidate_alpha[task] = _move_simplex_mass(best_alpha[task], step=step, rng=rng)
+            if candidate_alpha[task] == best_alpha[task]:
+                continue
+
+        candidate_score = evaluator.score(
+            stem_weights_per_task=candidate_stem,
+            view_alpha_per_task=candidate_alpha,
+        )
+        if candidate_score["final_weighted_score"] > best_score["final_weighted_score"] + 1e-12:
+            best_stem = candidate_stem
+            best_alpha = candidate_alpha
+            best_score = candidate_score
+            event = {
+                "iter": iteration,
+                "group": group,
+                "task": task,
+                "score": best_score["final_weighted_score"],
+            }
+            history.append(event)
+            print(
+                f"[random refine {iteration:5d}] {group}/{task} -> "
+                f"{best_score['final_weighted_score']:.10f}"
+            )
+
+    print(f"[random refine done] iters={n_iters} accepted={len(history)}")
+    return best_stem, best_alpha, best_score, history
 
 
 def stage_a_stem_search(
@@ -201,6 +313,7 @@ def stage_a_stem_search(
     init_stem: dict[str, tuple[float, ...]] | None,
     fixed_view_alpha: dict[str, tuple[float, float, float]],
     max_rounds: int,
+    evaluator: FastTTAEvaluator | None = None,
 ) -> tuple[dict[str, tuple[float, ...]], dict[str, float]]:
     """Per-task coordinate descent over stem simplex with fixed view alpha."""
     k = len(U10_STEMS)
@@ -211,6 +324,7 @@ def stage_a_stem_search(
         stem_weights_per_task=stem,
         view_alpha_per_task=fixed_view_alpha,
         records=records,
+        evaluator=evaluator,
     )
     best = score["final_weighted_score"]
     print(f"[stage A init] {best:.10f} stem={stem}")
@@ -226,6 +340,7 @@ def stage_a_stem_search(
                     stem_weights_per_task=trial,
                     view_alpha_per_task=fixed_view_alpha,
                     records=records,
+                    evaluator=evaluator,
                 )
                 if sc["final_weighted_score"] > best_local + 1e-12:
                     best_local, best_pt = sc["final_weighted_score"], pt
@@ -241,6 +356,7 @@ def stage_a_stem_search(
         stem_weights_per_task=stem,
         view_alpha_per_task=fixed_view_alpha,
         records=records,
+        evaluator=evaluator,
     )
     return stem, score
 
@@ -253,6 +369,7 @@ def stage_b_view_search(
     fixed_stem: dict[str, tuple[float, ...]],
     init_alpha: dict[str, tuple[float, float, float]] | None,
     max_rounds: int,
+    evaluator: FastTTAEvaluator | None = None,
 ) -> tuple[dict[str, tuple[float, float, float]], dict[str, float]]:
     grid = _simplex_grid(grid_step, 3)
     alpha = init_alpha or {t: (0.5, 0.5, 0.0) for t in TASKS}
@@ -261,6 +378,7 @@ def stage_b_view_search(
         stem_weights_per_task=fixed_stem,
         view_alpha_per_task=alpha,
         records=records,
+        evaluator=evaluator,
     )
     best = score["final_weighted_score"]
     print(f"[stage B init] {best:.10f} alpha={alpha}")
@@ -276,6 +394,7 @@ def stage_b_view_search(
                     stem_weights_per_task=fixed_stem,
                     view_alpha_per_task=trial,
                     records=records,
+                    evaluator=evaluator,
                 )
                 if sc["final_weighted_score"] > best_local + 1e-12:
                     best_local, best_pt = sc["final_weighted_score"], pt
@@ -291,6 +410,7 @@ def stage_b_view_search(
         stem_weights_per_task=fixed_stem,
         view_alpha_per_task=alpha,
         records=records,
+        evaluator=evaluator,
     )
     return alpha, score
 
@@ -305,6 +425,11 @@ def main() -> None:
     ap.add_argument("--max-rounds", type=int, default=4)
     ap.add_argument("--joint-rounds", type=int, default=2,
                     help="Alternating A->B refinement rounds after the first pass.")
+    ap.add_argument("--random-refine-iters", type=int, default=0,
+                    help="Budgeted local random refinement iterations after coordinate descent.")
+    ap.add_argument("--random-refine-step", type=float, default=None,
+                    help="Simplex mass moved per random refinement step; defaults to --grid-step.")
+    ap.add_argument("--random-seed", type=int, default=20260525)
     ap.add_argument("--tag", default="u10_per_task_tta")
     ap.add_argument("--stems", nargs="+", default=None,
                     help="Override the default 3-stem U10 stack.")
@@ -330,6 +455,13 @@ def main() -> None:
                 use_amp=use_amp, batch_size=args.batch_size,
             )
 
+    evaluator = FastTTAEvaluator(
+        per_stem_per_view=per_stem_per_view,
+        records=records,
+        stems=U10_STEMS,
+        views=VIEWS,
+    )
+
     # Reference baselines -----------------------------------------------------
     K = len(U10_STEMS)
     EQ_STEM = tuple([1.0 / K] * K)
@@ -347,6 +479,7 @@ def main() -> None:
             stem_weights_per_task=eq_stem_pt,
             view_alpha_per_task=alpha,
             records=records,
+            evaluator=evaluator,
         )
         ref_scores[name] = sc
         print(f"[ref] eq-stem / {name}: {sc['final_weighted_score']:.10f}")
@@ -362,6 +495,7 @@ def main() -> None:
         init_stem=eq_stem_pt,
         fixed_view_alpha=stored_only_alpha,
         max_rounds=args.max_rounds,
+        evaluator=evaluator,
     )
     print(f"[stage A done] {sa_score['final_weighted_score']:.10f} stem*={stem_star}")
 
@@ -374,6 +508,7 @@ def main() -> None:
         fixed_stem=stem_star,
         init_alpha=init_b,
         max_rounds=args.max_rounds,
+        evaluator=evaluator,
     )
     print(f"[stage B done] {sb_score['final_weighted_score']:.10f} alpha*={alpha_star}")
 
@@ -387,6 +522,7 @@ def main() -> None:
             init_stem=stem_star,
             fixed_view_alpha=alpha_star,
             max_rounds=args.max_rounds,
+            evaluator=evaluator,
         )
         alpha_star, sb = stage_b_view_search(
             per_stem_per_view=per_stem_per_view,
@@ -395,6 +531,7 @@ def main() -> None:
             fixed_stem=stem_star,
             init_alpha=alpha_star,
             max_rounds=args.max_rounds,
+            evaluator=evaluator,
         )
         if sb["final_weighted_score"] - cur_score < 1e-9:
             print(f"[joint r{j}] converged.")
@@ -402,17 +539,32 @@ def main() -> None:
         cur_score = sb["final_weighted_score"]
         print(f"[joint r{j}] {cur_score:.10f}")
 
+    random_score: dict[str, float] | None = None
+    random_history: list[dict[str, Any]] = []
+    if args.random_refine_iters > 0:
+        random_step = args.random_refine_step if args.random_refine_step is not None else args.grid_step
+        stem_star, alpha_star, random_score, random_history = random_refine_search(
+            evaluator=evaluator,
+            init_stem=stem_star,
+            init_alpha=alpha_star,
+            n_iters=args.random_refine_iters,
+            step=random_step,
+            seed=args.random_seed,
+        )
+        print(f"[random refine score] {random_score['final_weighted_score']:.10f}")
+
     final_score, final_preds = _eval_full(
         per_stem_per_view=per_stem_per_view,
         stem_weights_per_task=stem_star,
         view_alpha_per_task=alpha_star,
         records=records,
+        evaluator=evaluator,
     )
     delta_vs_stack = final_score["final_weighted_score"] - sota_baseline
-    delta_vs_active = final_score["final_weighted_score"] - 0.68925
+    delta_vs_reference_sota = final_score["final_weighted_score"] - REFERENCE_SOTA_SCORE
     print(f"[u10-tta FINAL] {final_score['final_weighted_score']:.10f} "
           f"delta_vs_u10_stack={delta_vs_stack:+.10f} "
-          f"delta_vs_active_SOTA(0.68925)={delta_vs_active:+.10f}")
+          f"delta_vs_AP_D4_SOTA({REFERENCE_SOTA_SCORE:.5f})={delta_vs_reference_sota:+.10f}")
     for t in TASKS:
         print(f"  task {t}: {final_score[t]:.6f}")
 
@@ -422,6 +574,12 @@ def main() -> None:
         rows.append({"variant": name, **{t: sc[t] for t in TASKS}, "weighted_score": sc["final_weighted_score"]})
     rows.append({"variant": "u10_stage_a_stem_search", **{t: sa_score[t] for t in TASKS}, "weighted_score": sa_score["final_weighted_score"]})
     rows.append({"variant": "u10_stage_b_view_search", **{t: sb_score[t] for t in TASKS}, "weighted_score": sb_score["final_weighted_score"]})
+    if random_score is not None:
+        rows.append({
+            "variant": "u10_random_refine_search",
+            **{t: random_score[t] for t in TASKS},
+            "weighted_score": random_score["final_weighted_score"],
+        })
     rows.append({"variant": "u10_per_task_tta_FINAL", **{t: final_score[t] for t in TASKS}, "weighted_score": final_score["final_weighted_score"]})
     pd.DataFrame(rows).to_csv(OUTPUT_DIR / f"{args.tag}_summary.csv", index=False)
     pd.DataFrame(final_preds).to_csv(OUTPUT_DIR / f"{args.tag}_preds.csv", index=False)
@@ -433,10 +591,18 @@ def main() -> None:
         "final_score": dict(final_score),
         "u10_stack_baseline": sota_baseline,
         "delta_vs_u10_stack": delta_vs_stack,
-        "delta_vs_active_SOTA": delta_vs_active,
+        "reference_sota_score": REFERENCE_SOTA_SCORE,
+        "delta_vs_reference_sota": delta_vs_reference_sota,
+        "delta_vs_active_SOTA": delta_vs_reference_sota,
         "grid_step": args.grid_step,
         "max_rounds": args.max_rounds,
         "joint_rounds": args.joint_rounds,
+        "fast_eval": True,
+        "random_refine_iters": args.random_refine_iters,
+        "random_refine_step": args.random_refine_step if args.random_refine_step is not None else args.grid_step,
+        "random_seed": args.random_seed,
+        "random_refine_accepts": len(random_history),
+        "random_refine_history": random_history,
     }
     (OUTPUT_DIR / f"{args.tag}_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[wrote] {OUTPUT_DIR / (args.tag + '_summary.csv')}")

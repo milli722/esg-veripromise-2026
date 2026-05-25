@@ -125,7 +125,7 @@
 ### 3.3 文件產物
 
 - [TRAINING_PLAN_FRESH_20260428.md](TRAINING_PLAN_FRESH_20260428.md) — 主計畫書（13 Phase 完整、§17.1 ~ §17.13、§18.1 D1~D20、§18.3 X1~X6 禁區、§19 推薦下一步、§19.1 規則確認）。
-- [README.md](README.md) — Phase 表 + SOTA 段落已更新到 Phase 13。
+- [README.md](../../README.md) — Phase 表 + SOTA 段落已更新到 Phase 13。
 - /memories/ml_ensemble_lessons.md — 教訓累積（最新含 Phase 13 三條）。
 - /memories/session/esg2026_phase8_state.md — session 狀態（含 Phase 13 完整數據）。
 
@@ -209,7 +209,7 @@
 
 **答**：**之前的「等驗證集」是工程選擇，不是規則限制。規則完全允許使用外部資料。**
 
-逐字檢視 [ESG_永續承諾驗證競賽_2026.md §八](ESG_永續承諾驗證競賽_2026.md)，禁止項目只有：
+逐字檢視 [ESG_永續承諾驗證競賽_2026.md §八](../../ESG_%E6%B0%B8%E7%BA%8C%E6%89%BF%E8%AB%BE%E9%A9%97%E8%AD%89%E7%AB%B6%E8%B3%BD_2026.md)，禁止項目只有：
 
 1. 抄襲、作弊、詐欺
 2. 侵害他人智慧財產權

@@ -63,7 +63,7 @@ Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 | T3 evidence_status (F1, Yes) | 0.88011 | **0.88045** | 0.87774 |
 | T4 evidence_quality (macro F1) | **0.48157** | 0.47496 | 0.46934 |
 
-Δ apples-to-apples（vs AP-D3 同 seed42 × 同 3-view 設定）= **+0.00244**（T1+0.00050、T2+0.00089、T3−0.00034、**T4+0.00661**）；AP-D4 加入的 stem #8 以 **Ollama qwen2.5:7b-instruct** 生成 80 列 Misleading + 60 列 within_2_years 作為訓練語料補充，針對 T4 / T2 連類頻低類別。重現指令見 [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071608)。
+Δ apples-to-apples（vs AP-D3 同 seed42 × 同 3-view 設定）= **+0.00244**（T1+0.00050、T2+0.00089、T3−0.00034、**T4+0.00661**）；AP-D4 加入的 stem #8 以 **Ollama qwen2.5:7b-instruct** 生成 80 列 Misleading + 60 列 within_2_years 作為訓練語料補充，針對 T4 / T2 低頻類別。重現指令見 [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071608)。
 
 ### Phase 32 → 36 進化軌跡
 
@@ -74,9 +74,10 @@ Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 | Phase 34 | + U10 v1/v2 偽標籤兩階段微調 | 0.6878 |
 | Phase 35 | + 5-way 6 stems × 3-view TTA | 0.7034 |
 | **Phase 36** | + U6-pro 反翻譯擴增 & 6-way × 3-view × per-task hillclimb | **0.71018** |
-| Phase 37 | + Aug-Plus 47 列親撞種子（single-stem ablation, seed=42）→ 7-way × 3-view（AP-D3） | 0.71364 |
+| Phase 37 | + Aug-Plus 47 列手工種子（single-stem ablation, seed=42）→ 7-way × 3-view（AP-D3） | 0.71364 |
 | **Phase 38** | + Ollama qwen2.5:7b-instruct 本機 LLM 合成 （stem #8）→ **8-way × 3-view（AP-D4）** | **0.71608** |
 | Phase 39 | AP-D5 grid 0.05 細粒度權重搜索可行性評估（單機 Stage A 單輪 ≈3h，列為負面消融；SOTA 維持 AP-D4） | 0.71608（unchanged） |
+| 2026-05-25 工程硬化 | submission validator + fast TTA evaluator + 小預算 refinement 入口；SOTA anchor 不變 | 0.71608（unchanged） |
 
 完整實驗紀錄見 [MASTER_PLAN_AND_PROGRESS.md](MASTER_PLAN_AND_PROGRESS.md)。
 
@@ -87,7 +88,7 @@ Phase 38 **AP-D4**（2026-05-20）— 5-Fold OOF（seed42）：
 ```
 esg-veripromise-2026/
 ├── SOTA_Reproduction_Phase36.ipynb    # 互動式重現手冊（檔名保留歷史 Phase 36，內容已延伸至 Phase 38）
-├── MASTER_PLAN_AND_PROGRESS.md        # 完整研究決策總控（Phase 1~39）
+├── MASTER_PLAN_AND_PROGRESS.md        # 完整研究決策總控（Phase 1~39 + 2026-05-25 工程硬化）
 ├── ESG_永續承諾驗證競賽_2026.md         # 競賽規則
 ├── README.md
 ├── requirements.txt
@@ -118,7 +119,7 @@ esg-veripromise-2026/
 │   ├── training/           # trainer / losses / schedulers
 │   ├── inference/          # post_process（階層約束）
 │   ├── eval/               # metrics（weighted_score）
-│   └── tools/              # OOF 集成 / hillclimb / 3-view TTA
+│   └── tools/              # OOF 集成 / hillclimb / 3-view TTA / submission validator
 │
 ├── scripts/
 │   ├── build_sota_notebook.py   # 重新產生 SOTA notebook
@@ -129,16 +130,16 @@ esg-veripromise-2026/
 │   ├── u10_sources.py           # 公司清單
 │   └── u6_backtranslate_pro.py  # NLLB-200 雙樞紐回譯 + ESG 術語表
 │
-├── tests/                  # pytest 單元測試（評分函式 + 後處理）
+├── tests/                  # pytest 單元測試（評分、後處理、validator、fast evaluator）
 └── docs/archive/           # 早期計畫存檔
 ```
 
 > **本機獨有（不上傳）**：
-> - `outputs/checkpoints/` ≈ 188 GB（6 stems × 3 seeds × 5 folds 的 best.pt 與 oof_probs.npz）
+> - `outputs/checkpoints/`（AP-D4 8 stems × seed42 約 44 GB；若保留歷史多 seed/多 Phase checkpoint，可能達百 GB 以上）
 > - `data/raw/` ≈ 1.3 GB（U10 永續報告書原始 PDF）
 > - `data/processed/`、`data/splits/`（可重生）
 > - `outputs/cache/`（per-view OOF 快取）
-> - `reports/{logs,runs,experiments,analysis,u6}/`（per-run 實驗中介物）
+> - `reports/{logs,runs,experiments,u6}/` 與 `reports/analysis/` 中未追蹤的 per-run 中介物（核心 AP-D summary/meta 已保留）
 >
 > 完整理由與重生方式見 §5 與 [`.gitignore`](.gitignore)。
 
@@ -170,23 +171,23 @@ pip install -r requirements.txt
 pytest -q
 ```
 
-### 4.3 開啟 SOTA 重現手冊
+### 4.3 開啟互動式 notebook（legacy 對照）
 
 ```powershell
 jupyter notebook SOTA_Reproduction_Phase36.ipynb
 ```
 
-筆記本第 §1 章可選擇執行模式：
+此 notebook 檔名保留 Phase 36 歷史脈絡，適合作互動式對照；AP-D4 標準主線仍以 [REPRODUCE.md](REPRODUCE.md) 為準。筆記本第 §1 章可選擇執行模式：
 
 | 模式 | 用途 | 預估耗時（RTX 5060 Laptop 8GB） |
 | :-- | :-- | :-- |
 | `explain` | 僅閱讀，不執行模型 | 0 分鐘 |
-| `load_oof` | **預設**。從既有 checkpoints 重建 OOF + hillclimb 重現 0.71018 | 8 ~ 12 分鐘 |
+| `load_oof` | **預設**。從既有 checkpoints/cache 重建 Phase 36 OOF + hillclimb 對照分數 0.71018 | 8 ~ 12 分鐘 |
 | `demo` | 對單一 stem 跑 1 fold smoke-train | 3 ~ 5 分鐘 |
-| `full` | 從零訓練 6 stems × 3 seeds × 5 folds | 30 ~ 40 GPU 小時 |
+| `full` | legacy Phase 36 從零訓練 6 stems × 3 seeds × 5 folds | 30 ~ 40 GPU 小時 |
 
 > **注意**：`demo` / `full` 需要 GPU 自行訓練 `outputs/checkpoints/best.pt`。
-> 公開 GitHub 倉儲僅含程式碼與設定檔，不含模型權重（總計約 38 GB）。
+> 公開 GitHub 倉儲僅含程式碼與設定檔，不含模型權重；AP-D4 權重需依 [REPRODUCE.md](REPRODUCE.md) 重新訓練或由作者另行提供。
 
 #### `load_oof` 模式快速重現（無 GPU 也可）
 
@@ -212,7 +213,7 @@ Expand-Archive load_oof_bundle_phase36.zip -DestinationPath . -Force
 
 ## 5. 完整重現流程
 
-從零端到端重訓 Phase 36 SOTA（不依賴任何既有 checkpoint）。
+從零端到端重訓 Phase 38 AP-D4 SOTA（不依賴任何既有 checkpoint）。
 
 ### 5.1 重生資料層
 
@@ -303,14 +304,14 @@ python -m src.train_pseudo_kfold --config configs\exp_p2_combo_best_aug_plus_v2.
   - 測試：`tests/test_u13_synth.py` 12 個測試全綠。
   - **詳見 [MASTER_PLAN §54](MASTER_PLAN_AND_PROGRESS.md#54-phase-37-並行路線--u13llm-合成--人工標註--llm-評審規劃中llm-合成已於-55-落地)**。
 
-### 6.4 集成（Phase 36 核心）
+### 6.4 集成（Phase 36 到 AP-D4）
 
-對每個任務同時搜尋兩組 simplex 權重：
+AP-D4 沿用 Phase 36 已驗證的 per-task stem/view 權重搜尋設計，並擴充為 8-way × 3-view。對每個任務同時搜尋兩組 simplex 權重：
 
-- **Stem 權重** $w^{(t)} \in \Delta^5$（6 個 stem 加總為 1）
+- **Stem 權重** $w^{(t)}$（AP-D4 為 8 個 stem 加總為 1）
 - **View 權重** $\alpha^{(t)} \in \Delta^2$（stored + middle + tail 三視角加總為 1）
 
-使用 grid step = 0.05 的座標下降，A↔B 交替 2 輪即收斂。最終 hillclimb 收斂至：
+AP-D4 標準重現使用 grid step = 0.1 的座標下降，A↔B 交替 2 輪即收斂；2026-05-25 起評分核心接上 fast evaluator，避免每個候選都走逐列 string/sklearn pipeline。下表為 Phase 36 6-way legacy 權重範例，AP-D4 最終權重請以 `reports/analysis/_ensemble/ap_d4_8way_3view_meta.json` 為準：
 
 | 任務 | Stem w*（依 stem #1~#6 順序） | View α*（stored, middle, tail） |
 | :-: | :-- | :-- |
@@ -386,17 +387,17 @@ python scripts/ap_llm_synth.py promote --gated-csv data/aug_plus/aug_gated.csv -
 
 | 項目 | 估計 |
 | :-- | :-- |
-| 單 fold 訓練（base，max_len=384，bs=8） | 3~5 分鐘 |
-| 單 stem（3 seeds × 5 folds） | 1.5~2.5 GPU 小時 |
-| 6 stems 全部訓練 | 約 9~15 GPU 小時（不含 U10 偽標籤產生的兩階段乘數） |
-| Phase 36 完整管線（含 U10 教師推論 / U6-pro NLLB 回譯） | 30~40 GPU 小時 |
+| 單 fold 訓練（base，max_len=384，bs=8） | 5~7 分鐘 |
+| 單 stem（seed42 × 5 folds） | 約 30~40 分鐘 |
+| AP-D4 8 stems 訓練 | 約 7~8 GPU 小時 |
+| 完整歷史多 seed / 多 Phase 實驗重跑 | 30~40 GPU 小時以上 |
 
 ---
 
 ## 9. 常見問題
 
 **Q1. clone 之後為何沒有 `outputs/checkpoints/`？**
-A. 全部 6 個 stem 的 best.pt 約 188 GB，超過 GitHub 與 Git LFS 的合理上限。請依 §5 重訓，或洽作者取得權重備份。
+A. AP-D4 8 stems × seed42 checkpoint 約 44 GB；若連歷史多 seed / 多 Phase 權重一起保留，會達百 GB 等級，超過 GitHub 與 Git LFS 的合理上限。請依 §5 重訓，或洽作者取得權重備份。
 
 **Q2. `MODE="load_oof"` 但筆記本提示 checkpoint missing？**
 A. 你需要先完成 §5.2 訓練。或將別處備份的 `outputs/checkpoints/{stem}/seed{S}/fold{F}/best.pt` 與 `oof_probs.npz` 放回原位。
@@ -410,8 +411,8 @@ A. T4 的 `Misleading` 與 `Not Clear` 類別計數合計 < 80，是分數天花
 **Q5. U10 偽標籤如何避免污染驗證集？**
 A. 偽標籤只進 fold-train，永遠不寫入 fold-val；OOF 索引嚴格依官方 1,000 筆全域索引拼接。
 
-**Q6. 我的分數比 0.71018 低 / 高 0.005，正常嗎？**
-A. 正常。cuDNN 非決定性、torch 浮點累加順序、tokenizer 版本（4.41 ↔ 4.45）皆會引入 ±0.0005 漂移；U10 / U6 重跑可能再帶 ±0.003。
+**Q6. 我的分數比 0.71608 低 / 高 0.005，正常嗎？**
+A. 若只重跑 AP-D4 ensemble 且使用既有 OOF/cache，漂移應接近 ±0.0005；若從 U10 / U6 / Aug-Plus 資料或模型訓練重新生成，外部 PDF 解析、tokenizer 與 cuDNN 非決定性可能再帶來 ±0.003 級漂移。
 
 ---
 

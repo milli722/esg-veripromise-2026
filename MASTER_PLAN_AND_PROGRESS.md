@@ -69,6 +69,7 @@
 | 早期寬鬆上限（Phase 18 估計） | 0.7570，距目前 0.71608 約 +0.04092 |
 | 官方 valid 釋出 | 2026-06-03，需用於 OOF drift 與 submission anchor 校準 |
 | 官方 test 釋出 | 2026-06-10，至 2026-06-17 22:00 截止 |
+| 最近完成工程動作 | F2 submission validator + F4 fast TTA evaluator 已落地；50 個單元測試全綠 |
 | 訓練集 | 1,000 筆，50 家 TWSE 上市公司，FY2022-FY2024 |
 | 本機硬體 | RTX 5060 Laptop 8 GB CUDA，Windows + PowerShell 5.1 |
 | Python 注意事項 | 實作紀錄曾使用系統 Python 3.13；`.venv` 可能缺 numpy，訓練前需重新確認環境 |
@@ -105,8 +106,10 @@ AP-D4 相對 AP-D3 的 apples-to-apples 增益為 +0.00244，主要來自 T4 +0.
 | 類別 | 主要位置 | 角色 |
 | :-- | :-- | :-- |
 | 訓練入口 | `src/train_kfold.py`、`src/train_pseudo_kfold.py` | 官方資料與 pseudo/augmented two-stage 訓練 |
-| 集成工具 | `src/tools/u10_per_task_tta.py` | AP-D3/AP-D4 的 stem/view per-task hillclimb |
+| 集成工具 | `src/tools/u10_per_task_tta.py` | AP-D3/AP-D4 的 stem/view per-task hillclimb；已接上 fast evaluator 與 budgeted random refinement |
+| 搜尋評分核心 | `src/tools/tta_fast_eval.py` | integer-label exact evaluator，避免每個 candidate 都走 string/sklearn pipeline |
 | 後處理 | `src/inference/post_process.py` | T1/T3 條件式約束覆寫 |
+| 提交守門 | `src/tools/validate_submission.py` | prediction/submission CSV 的欄位、label domain、ID、hierarchy 與字串欄位檢查 |
 | 評分 | `src/eval/metrics.py` | 4 任務 F1 與 weighted score |
 | 設定檔 | `configs/exp_p2_combo_best*.yaml` | 8 個 SOTA stem 的配方來源 |
 | Aug-Plus | `assets/aug_plus/`、`data/aug_plus/`、`scripts/ap_*.py` | 手工與 LLM 合成少數類擴增 |
@@ -444,7 +447,7 @@ esg-veripromise-2026/
 | X11 | NeZha / ERNIE base | 不可訓或 0.609 | 不採納 |
 | X12 | EMA 0.995 + 2 epoch warm-start | 約 -0.016 | 不採納 |
 | X13 | NLLB-600M zh-en-zh BT | 約 -0.00237 | 已被 U6-pro 取代 |
-| X14 | AP-D5 fine-grid 0.05 無向量化 | 單輪估約 3 小時，ROI 不佳 | 無向量化前不重跑 |
+| X14 | AP-D5 fine-grid 0.05 舊版無向量化 | 單輪估約 3 小時，ROI 不佳 | 已補 fast evaluator；仍不裸跑全量 fine-grid，先用等價測試與小預算 refinement |
 
 禁區不是永久否定概念本身，而是禁止重跑同設定。若未來要解禁，必須先提出與原失敗設定不同的假設、資料、硬體或 objective。
 
@@ -480,9 +483,9 @@ esg-veripromise-2026/
 | 優先 | ID | 項目 | 預期價值 | 風險 | 狀態 |
 | :--: | :-- | :-- | :-- | :-- | :-- |
 | 1 | F1 | 6/03 valid 校準 AP-D4/AP-D3/Phase36 | 判斷 OOF drift、選 submission anchor | 低 | 待 valid 釋出 |
-| 2 | F2 | 最終提交檔與 schema 清理 | 避免格式或約束錯誤 | 低 | 待 test 格式確認 |
+| 2 | F2 | 最終提交檔與 schema 清理 | 避免格式或約束錯誤 | 低 | validator 已完成；仍待 test 格式確認 |
 | 3 | F3 | Submission anchor 設計 | 21 次提交額度內找穩定解 | 中 | 規劃中 |
-| 4 | F4 | AP-D5 搜尋向量化、cache 或替代 optimizer | 若能降到 <30 min，可重試 fine grid | 中 | 需工程加速；無加速前不重跑 |
+| 4 | F4 | AP-D5 搜尋向量化、cache 或替代 optimizer | 降低搜尋成本，讓後續 AP-D5 可在小預算內試 | 中 | fast evaluator + random refinement prototype 已完成；不重跑舊版 X14 |
 | 5 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 新成員 diversity，理論上比 fine grid 更可能突破 | 中高 | 待 ROI 重估 |
 | 6 | F6 | 外部 provider LLM 合成與人工抽樣 review | 擴大 T4/T2 minority 合成來源 | 中高 | 需規則、成本與品質閘門 |
 | 7 | F7 | T4 Misleading / T2 minority 專項 | 理論上限高，但極易 overfit | 高 | 暫緩至 valid 有訊號 |
@@ -500,12 +503,26 @@ esg-veripromise-2026/
 
 | 類型 | 事項 | 啟動條件 | 決策原則 |
 | :-- | :-- | :-- | :-- |
-| 立即可做 | F4 `_eval_full` 向量化、權重 cache、Bayesian/CMA-ES 替代搜尋原型 | 不需 valid；只改搜尋效率 | 先用 AP-D4 cache 做等價性測試，確認 score 完全一致後再重跑 AP-D5 |
-| 等 valid | F1/F2/F3 valid 校準、schema 守門與 submission anchor 分配 | 2026-06-03 valid 釋出 | 優先選 valid drift 最小的 anchor，不只看 OOF 最高 |
+| 已完成本地工程 | F4 `_eval_full` fast evaluator、權重 tensor cache、budgeted random refinement | 已完成；不依賴 valid/test | 已用 synthetic AP-D cache 等價測試確認與舊 `_eval_full` score/preds 一致；後續只跑小預算 refinement，不回到舊版全量 fine-grid |
+| 等 valid/test | F1/F2/F3 valid 校準、schema 守門與 submission anchor 分配 | 2026-06-03 valid 與 2026-06-10 test 格式釋出 | 優先選 valid drift 最小的 anchor，不只看 OOF 最高；上傳前必跑 `validate_submission` |
+| 已完成本地工程 | F2 submission validator | 已完成；不依賴 valid/test | 可先檢內部 `*_preds.csv`，final submission 仍需補足官方要求欄位 |
 | 條件式重啟 | F5 stem #9 U13 LLM 評審重標 U10 | valid 顯示 AP-D4 沒有明顯 overfit，且 T4/T2 仍是主要缺口 | 新成員需先過 ensemble admission；不能只看 single-stem OOF |
 | 條件式重啟 | F6 外部 provider 合成與人工 review | 規則、成本、來源紀錄與 quality gate 都可審計 | 合成資料只補 minority；不得使用 valid/test 洩漏資訊 |
 | 暫緩 | F7 T4/T2 專項重訓 | valid 指出特定 minority 類仍可收益 | 避免 global sampler 類型的跨任務副作用 |
 | 長期 | F8 跨家族 teacher / Qwen-LoRA | 有 16 GB+ GPU 或新訓練策略 | 以結構性 diversity 為目標，不重跑已拒絕的同設定 backbone |
+
+### 14.3 F4 搜尋工程完成狀態（2026-05-25）
+
+本輪已完成不依賴 valid/test 的 AP-D 搜尋工程硬化，目標是讓 Phase 39 的 X14 問題不再阻塞後續小預算探索，但不直接宣稱 SOTA 提升。
+
+| 項目 | 實作 | 驗證 | 決策 |
+| :-- | :-- | :-- | :-- |
+| fast exact evaluator | `src/tools/tta_fast_eval.py` 以 integer label、tensor stack、`np.tensordot` 評估 stem/view 權重 | `tests/test_tta_fast_eval.py` 確認 score 與 preds 等價舊 `_eval_full` | 可作為 AP-D4/AP-D5 搜尋預設評分核心 |
+| `u10_per_task_tta.py` 整合 | `_eval_full` 預設走 `FastTTAEvaluator`；舊路徑保留為 `_eval_full_reference` 供回歸測試 | `python -m src.tools.u10_per_task_tta --help` 通過 | AP-D4 重現指令不變，輸出 meta 會標記 `fast_eval=true` |
+| 小預算 refinement | 新增 `--random-refine-iters`、`--random-refine-step`、`--random-seed` | 測試確認 refinement 不接受退步候選，simplex 權重和維持為 1 | 後續可用於 AP-D5 小預算試跑；不回到無向量化全量 grid 0.05 |
+| submission guardrail | `src/tools/validate_submission.py` | `tests/test_validate_submission.py`、`tests/test_post_process.py`、全測試 50 passed | 上傳前必跑，並用 `keep_default_na=False` 保留字串 `N/A` |
+
+目前可安全等待 6/03 valid 的條件已滿足：submission schema 守門完成、AP-D 搜尋核心完成等價測試、舊版 compute-infeasible fine-grid 已有替代探索入口。下一步不應再新增同質模型或重跑長時間搜尋，除非 valid 顯示 AP-D4 有明確 drift 或 T2/T4 缺口。
 
 ---
 
@@ -529,6 +546,26 @@ esg-veripromise-2026/
 3. 檢查 T1=No 的下游欄位是否全為 N/A 或空字串。
 4. 檢查 T3=No 時 T4 是否為 N/A。
 5. 保留每次提交的 config、git hash、ensemble meta、submission 檔案 hash。
+
+### 15.3 Submission validator（2026-05-25 已完成）
+
+新增工具：`src/tools/validate_submission.py`，測試：`tests/test_validate_submission.py`。
+
+| 模式 | 指令 | 用途 |
+| :-- | :-- | :-- |
+| final submission 嚴格模式 | `python -m src.tools.validate_submission outputs/submissions/<file>.csv --mode submission` | 檢查 `id`、四任務 label、`promise_string`、`evidence_string`、ID 重複、label domain 與 hierarchy |
+| internal preds 模式 | `python -m src.tools.validate_submission reports/analysis/_ensemble/<tag>_preds.csv --mode preds --allow-promise-yes-na-timeline` | 檢查 ensemble 內部 prediction CSV；允許 label-only 輸出，但提醒 final submission 必須補字串欄位 |
+
+AP-D4 內部檢查結果：
+
+| 檢查項 | 結果 | 決策 |
+| :-- | :-- | :-- |
+| `tests/test_validate_submission.py` + `tests/test_post_process.py` | 15 passed | validator 與 post-process 守門一致 |
+| 全測試 | 50 passed | 新工具未破壞既有測試 |
+| AP-D4 `ap_d4_8way_3view_preds.csv` 寬鬆 preds 模式 | OK，1,000 rows | 主要 hierarchy 已通過 |
+| AP-D4 final submission 嚴格風險 | 缺 `promise_string`、`evidence_string`；另有 10 筆 `promise_status=Yes` 且 `verification_timeline=N/A` | 上傳前必須由 submission generator 補字串欄位，並決定是否強制修正 Yes+N/A timeline |
+
+注意：統計與驗證 CSV 時必須使用 `keep_default_na=False`，否則 pandas 會把字串 `N/A` 當成缺失值，導致 hierarchy 計數失真。
 
 ---
 
@@ -2828,7 +2865,7 @@ per-task α* (stored / middle / tail)：
  T2 (0.1, 0.1, 0.0, 0.4, 0.3, 0.1) = 0.69446
  T3 (0.3, 0.2, 0.3, 0.0, 0.0, 0.2) = 0.68921
  T4 (0.1, 0.1, 0.0, 0.4, 0.0, 0.4) = 0.68715
-[u10-tta FINAL] 0.71017760 delta_vs_u10_stack=+0.02790 delta_vs_active_SOTA(0.68925)=+0.02093
+[u10-tta FINAL] 0.71017760 delta_vs_u10_stack=+0.02790 delta_vs_phase18_U1c(0.68925)=+0.02093
  per-task: T1=0.94210 / T2=0.62778 / T3=0.87774 / T4=0.46934
  α* (stored, middle, tail):
  T1 (0.0, 0.0, 1.0) ← 全 tail
@@ -3442,6 +3479,28 @@ py -3.13 -m src.tools.u10_per_task_tta `
 - 本章節（Phase 39 紀錄）。
 - **無 OOF / 無 ckpt / 無 summary.csv**：本 Phase 不修改任何模型或 ensemble 產出。
 
+### 56.8 2026-05-25 工程補強：F4 fast evaluator + 小預算 refinement
+
+Phase 39 的「無向量化前不重跑」條件已完成本地工程補強，但此補強只改搜尋效率與審計性，**不改採納中的 SOTA 分數**。
+
+| Phase 39 建議 | 2026-05-25 狀態 | 說明 |
+| :-- | :-- | :-- |
+| W1 `_eval_full` 向量化 | 已完成核心替換 | 新增 `src/tools/tta_fast_eval.py`，以 tensor stack + integer F1 取代逐列 string/sklearn 評分；`tests/test_tta_fast_eval.py` 驗證與舊 `_eval_full_reference` score/preds 完全等價 |
+| W2 cache | 已完成 evaluator 內部 tensor cache | per-task/per-view/per-stem probabilities 在 evaluator 初始化時堆疊，後續 candidate 只做權重張量混合與 argmax |
+| W3 替代 optimizer | 已完成可控原型 | `u10_per_task_tta.py` 新增 `--random-refine-iters` / `--random-refine-step` / `--random-seed`；只接受 post-constraint weighted score 上升的候選 |
+
+建議後續用法：
+
+```pwsh
+python -m src.tools.u10_per_task_tta `
+  --stems <AP-D4 8 stems> `
+  --grid-step 0.1 --max-rounds 4 --joint-rounds 2 `
+  --random-refine-iters 2000 --random-refine-step 0.05 `
+  --tag ap_d4_8way_3view_refine2k
+```
+
+決策：在 6/03 valid 釋出前，不為了追求 +0.000x 而長時間重跑 AP-D5；若要試，只能用上述小預算 refinement，且必須保留 meta/history 並與 AP-D4 anchor 做 apples-to-apples 比較。
+
 ---
 
 <a id="part-v--附錄-appendix"></a>
@@ -3519,7 +3578,7 @@ py -3.13 -m src.tools.u10_per_task_tta `
 | ID | 項目 | 狀態 | 啟動條件 | 產出 |
 | :--: | :-- | :-- | :-- | :-- |
 | F1 | AP-D4 / AP-D3 / Phase36 valid 校準 | 待辦 | 2026-06-03 valid 釋出 | valid score、per-task drift、submission anchor 建議 |
-| F2 | 最終提交檔 schema 與 hierarchy 守門 | 待辦 | test 格式或官方範例確認 | submission validator、約束檢查紀錄 |
+| F2 | 最終提交檔 schema 與 hierarchy 守門 | 本地 validator 已完成；final 格式仍待確認 | test 格式或官方範例確認 | `validate_submission` 檢查紀錄、最終 submission 欄位對齊 |
 | F3 | Submission anchor 分配策略 | 待辦 | valid 校準後 | 21 次提交額度的主線與 fallback 順序 |
 
 <a id="5622-下一輪可動執行路線v30-校訂-2026-05-10"></a>
@@ -3527,7 +3586,7 @@ py -3.13 -m src.tools.u10_per_task_tta `
 
 | ID | 名稱 | 就緒度 | 重訓 | 前置條件 | 決策原則 |
 | :--: | :-- | :-- | :--: | :-- | :-- |
-| F4 | AP-D5 搜尋向量化 / cache / Bayesian 或 CMA-ES | 可立即做工程原型 | 否 | 先證明 AP-D4 score 等價；將 grid 0.05 降到 <30 min | 無加速前不重跑 X14 同設定 |
+| F4 | AP-D5 搜尋向量化 / cache / 小預算替代 optimizer | 本地工程已完成 | 否 | valid 後若 AP-D4 仍為主 anchor，可小預算 refinement；不需新訓練 | 只接受 post-constraint weighted score 上升；保留 meta/history，不重跑舊版 X14 |
 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 待設計 | 是 | valid 顯示 AP-D4 未 overfit，且 T4/T2 仍為缺口 | 需過 ensemble admission，不以 single-stem OOF 判斷 |
 | F6 | 外部 provider LLM 合成 + 人工抽樣 review | 待資源與規則審計 | 是 | provider、prompt、來源紀錄、quality gate 完整 | 只補 minority，不使用 valid/test 洩漏資訊 |
 | F7 | T4 Misleading / T2 minority 專項重訓 | 暫緩 | 可能 | valid 顯示特定 minority 類仍可收益 | 避免 global sampler 對其他任務造成副作用 |
