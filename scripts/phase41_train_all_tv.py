@@ -80,10 +80,19 @@ def _all_checkpoints_present(exp_name: str) -> bool:
     return True
 
 
-def _read_score_summary(exp_name: str) -> dict | None:
+def _read_score_summary(exp_name: str) -> float | None:
+    """Return mean OOF weighted_score, or None if summary file missing."""
     p = REPORT_ROOT / exp_name / "score_summary.json"
-    if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
+    if not p.exists():
+        return None
+    data = json.loads(p.read_text(encoding="utf-8"))
+    # data is a list of per-fold dicts: [{"weighted_score": 0.681, ...}, ...]
+    if isinstance(data, list) and data:
+        scores = [row["weighted_score"] for row in data if "weighted_score" in row]
+        return round(sum(scores) / len(scores), 5) if scores else None
+    # fallback: older nested-dict format
+    if isinstance(data, dict):
+        return data.get("overall", {}).get("mean")
     return None
 
 
@@ -121,11 +130,10 @@ def main() -> None:
 
         if args.resume and _all_checkpoints_present(exp_name):
             print(f"  [skip] all {N_FOLDS} checkpoints already present")
-            summary = _read_score_summary(exp_name)
-            if summary:
-                ws = summary.get("overall", {}).get("mean", "?")
+            ws = _read_score_summary(exp_name)
+            if ws is not None:
                 print(f"  [cached] OOF weighted_score = {ws}")
-                results.append({"stem": exp_name, "status": "skipped", "score": ws})
+            results.append({"stem": exp_name, "status": "skipped", "score": ws})
             continue
 
         cmd = [sys.executable, "-m", module, "--config", config_file]
@@ -145,8 +153,7 @@ def main() -> None:
             break
 
         ckpts_ok = _all_checkpoints_present(exp_name)
-        summary = _read_score_summary(exp_name)
-        ws = summary.get("overall", {}).get("mean", "?") if summary else "?"
+        ws = _read_score_summary(exp_name)
         print(f"  [done] elapsed={elapsed:.0f}s  checkpoints_ok={ckpts_ok}  OOF={ws}")
         results.append({
             "stem": exp_name,
