@@ -39,7 +39,7 @@
 | 想知道目前最強結果 | [§2 現況快照](#current-status)、[§5 SOTA 軌跡](#sota-scoreboard) |
 | 想重現 0.71608 | [REPRODUCE.md §5](REPRODUCE.md#5-集成產出-sota-oof-071608)、[§8 現行 AP-D4 管線](#current-pipeline) |
 | 想判斷下一步做什麼 | [§14 待辦與 ROI](#roadmap)、[§13 上限與殘留風險](#risk-and-limits) |
-| 想避免重跑失敗方向 | [§12 負面結果與禁區](#negative-results)、[§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試) |
+| 想避免重跑失敗方向 | [§12 負面結果與禁區](#negative-results)、[§59.3](#593-已暫緩或證明不可行的方向避免重複嘗試) |
 | 想看完整實驗證據 | [Part IV 完整 Phase Log](#part-iv--完整-phase-log-append-only-evidence) |
 | 想確認外部資料是否合法 | [§18 規則與治理](#governance)、[§59](#59-競賽規則對外部資料的立場已確認可用) |
 
@@ -483,30 +483,34 @@ esg-veripromise-2026/
 
 | 優先 | ID | 項目 | 預期價值 | 風險 | 狀態 |
 | :--: | :-- | :-- | :-- | :-- | :-- |
-| 1 | F1 | 6/03 valid 校準 AP-D4/AP-D3/Phase36 | 判斷 OOF drift、選 submission anchor | 低 | **部分完成**：label fix + U12/U15 腳本就緒；待 checkpoints 存在後執行推論 |
+| 1 | F1 | 6/03 valid 校準 AP-D4/AP-D3/Phase36 | 判斷 OOF drift、選 submission anchor | 低 | **Phase 40 完成工程準備**；label fix + U12 gap 腳本就緒；待 AP-D4 train checkpoints 在機器上重訓後執行 |
 | 2 | F2 | 最終提交檔與 schema 清理 | 避免格式或約束錯誤 | 低 | validator 已完成；仍待 test 格式確認 |
-| 3 | F3 | Submission anchor 設計 | 21 次提交額度內找穩定解 | 中 | 規劃中 |
-| 4 | F4 | AP-D5 搜尋向量化、cache 或替代 optimizer | 降低搜尋成本，讓後續 AP-D5 可在小預算內試 | 中 | fast evaluator + random refinement prototype 已完成；不重跑舊版 X14 |
-| 5 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 新成員 diversity，理論上比 fine grid 更可能突破 | 中高 | 待 ROI 重估 |
-| 6 | F6 | 外部 provider LLM 合成與人工抽樣 review | 擴大 T4/T2 minority 合成來源 | 中高 | 需規則、成本與品質閘門 |
-| 7 | F7 | T4 Misleading / T2 minority 專項 | 理論上限高，但極易 overfit | 高 | 暫緩至 valid 有訊號 |
-| 8 | F8 | 跨家族 teacher / Qwen-LoRA | 可能打破同 teacher 上限 | 高 | 需更大 GPU 或新策略 |
+| 3 | F3 | Submission anchor 設計 | 21 次提交額度內找穩定解 | 中 | 規劃中；Phase 42 時定案 |
+| 4 | F4 | AP-D5 搜尋向量化、cache 或替代 optimizer | 降低搜尋成本，讓後續 AP-D5 可在小預算內試 | 中 | **已完成**：fast evaluator + random refinement；不重跑舊版 X14 |
+| 5 | **F9** | **Phase 41 Train+Val 8-stem 重訓** | 2× 資料量、最終 checkpoint，提升測試集推論品質 | 低 | **進行中（2026-06-05~06-10）**：stem 1/8 訓練中 |
+| 6 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 新成員 diversity，理論上比 fine grid 更可能突破 | 中高 | 待 Phase 41 完成後 ROI 重估 |
+| 7 | F6 | 外部 provider LLM 合成與人工抽樣 review | 擴大 T4/T2 minority 合成來源 | 中高 | 需規則、成本與品質閘門 |
+| 8 | F7 | T4 Misleading / T2 minority 專項 | 理論上限高，但極易 overfit | 高 | 暫緩至 valid 有訊號 |
+| 9 | F8 | 跨家族 teacher / Qwen-LoRA | 可能打破同 teacher 上限 | 高 | 需更大 GPU 或新策略 |
 
-### 14.1 6/03 valid 校準清單
+### 14.1 6/03 valid 校準清單（Phase 40 工程準備完成；推論待執行）
 
-1. 對 AP-D4、AP-D3、Phase 36 三個 anchor 跑同一套 valid scoring。
+1. 對 AP-D4、AP-D3、Phase 36 三個 anchor 跑同一套 valid scoring（工具：`scripts/u12_val_gap.py`，待 checkpoints 存在後執行）。
 2. 比較 OOF 與 valid 的 per-task drift，特別是 T2/T4。
 3. 檢查 post-process constraints 對 valid 的實際增益或副作用。
 4. 若 AP-D4 drift > 0.008 且 AP-D3/Phase36 更穩，submission 主線改採更穩 anchor。
 5. 將 valid 結果回寫本章與 README/REPRODUCE。
+6. **注意**：val 集的 `more_than_5_years` 已由 loader.py `_LABEL_ALIASES` 正規化；不需另外處理。
 
 ### 14.2 Phase 40+ 可做事項分流
 
 | 類型 | 事項 | 啟動條件 | 決策原則 |
 | :-- | :-- | :-- | :-- |
+| **進行中** | **F9 Phase 41 Train+Val 8-stem 重訓** | **2026-06-05 已啟動，2026-06-10 前完成** | stem 1 (p2_combo_best_tv) 訓練中；完成後進 Phase 42 集成搜索 |
 | 已完成本地工程 | F4 `_eval_full` fast evaluator、權重 tensor cache、budgeted random refinement | 已完成；不依賴 valid/test | 已用 synthetic AP-D cache 等價測試確認與舊 `_eval_full` score/preds 一致；後續只跑小預算 refinement，不回到舊版全量 fine-grid |
-| 等 valid/test | F1/F2/F3 valid 校準、schema 守門與 submission anchor 分配 | 2026-06-03 valid 與 2026-06-10 test 格式釋出 | 優先選 valid drift 最小的 anchor，不只看 OOF 最高；上傳前必跑 `validate_submission` |
+| 已完成工程準備 | F1 valid 校準（label fix + U12 腳本）| 2026-06-03 valid 已釋出；工具就緒；推論待 checkpoints 建好後執行 | 優先選 valid drift 最小的 anchor，不只看 OOF 最高；上傳前必跑 `validate_submission` |
 | 已完成本地工程 | F2 submission validator | 已完成；不依賴 valid/test | 可先檢內部 `*_preds.csv`，final submission 仍需補足官方要求欄位 |
+| 等 test 釋出 | F3 Submission anchor 設計 | 2026-06-10 test 釋出後 | TV checkpoints + AP-D hillclimb → Phase 42 定案 |
 | 條件式重啟 | F5 stem #9 U13 LLM 評審重標 U10 | valid 顯示 AP-D4 沒有明顯 overfit，且 T4/T2 仍是主要缺口 | 新成員需先過 ensemble admission；不能只看 single-stem OOF |
 | 條件式重啟 | F6 外部 provider 合成與人工 review | 規則、成本、來源紀錄與 quality gate 都可審計 | 合成資料只補 minority；不得使用 valid/test 洩漏資訊 |
 | 暫緩 | F7 T4/T2 專項重訓 | valid 指出特定 minority 類仍可收益 | 避免 global sampler 類型的跨任務副作用 |
@@ -514,16 +518,25 @@ esg-veripromise-2026/
 
 ### 14.3 F4 搜尋工程完成狀態（2026-05-25）
 
-本輪已完成不依賴 valid/test 的 AP-D 搜尋工程硬化，目標是讓 Phase 39 的 X14 問題不再阻塞後續小預算探索，但不直接宣稱 SOTA 提升。
-
 | 項目 | 實作 | 驗證 | 決策 |
 | :-- | :-- | :-- | :-- |
 | fast exact evaluator | `src/tools/tta_fast_eval.py` 以 integer label、tensor stack、`np.tensordot` 評估 stem/view 權重 | `tests/test_tta_fast_eval.py` 確認 score 與 preds 等價舊 `_eval_full` | 可作為 AP-D4/AP-D5 搜尋預設評分核心 |
 | `u10_per_task_tta.py` 整合 | `_eval_full` 預設走 `FastTTAEvaluator`；舊路徑保留為 `_eval_full_reference` 供回歸測試 | `python -m src.tools.u10_per_task_tta --help` 通過 | AP-D4 重現指令不變，輸出 meta 會標記 `fast_eval=true` |
 | 小預算 refinement | 新增 `--random-refine-iters`、`--random-refine-step`、`--random-seed` | 測試確認 refinement 不接受退步候選，simplex 權重和維持為 1 | 後續可用於 AP-D5 小預算試跑；不回到無向量化全量 grid 0.05 |
-| submission guardrail | `src/tools/validate_submission.py` | `tests/test_validate_submission.py`、`tests/test_post_process.py`、全測試 50 passed | 上傳前必跑，並用 `keep_default_na=False` 保留字串 `N/A` |
+| submission guardrail | `src/tools/validate_submission.py` | `tests/test_validate_submission.py`、`tests/test_post_process.py`、全測試 60 passed（Phase 40 後）| 上傳前必跑，並用 `keep_default_na=False` 保留字串 `N/A` |
 
-目前可安全等待 6/03 valid 的條件已滿足：submission schema 守門完成、AP-D 搜尋核心完成等價測試、舊版 compute-infeasible fine-grid 已有替代探索入口。下一步不應再新增同質模型或重跑長時間搜尋，除非 valid 顯示 AP-D4 有明確 drift 或 T2/T4 缺口。
+### 14.4 Phase 41 Train+Val 重訓狀態（2026-06-05 啟動）
+
+| Stem | Config | 訓練腳本 | 狀態 |
+| :-- | :-- | :-- | :-- |
+| p2_combo_best_tv | `exp_p2_combo_best_tv.yaml` | `train_kfold` | **訓練中** |
+| p2_combo_best_u10_pseudo_tv | `exp_p2_combo_best_u10_pseudo_tv.yaml` | `train_pseudo_kfold` | 排程中 |
+| p2_combo_best_u10_pseudo_v2_tv | `exp_p2_combo_best_u10_pseudo_v2_tv.yaml` | `train_pseudo_kfold` | 排程中 |
+| p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv | `..._tv.yaml` | `train_pseudo_kfold` | 排程中 |
+| p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv | `..._tv.yaml` | `train_pseudo_kfold` | 排程中 |
+| p2_combo_best_classw_focal_u6pro_tv | `..._tv.yaml` | `train_pseudo_kfold` | 排程中 |
+| p2_combo_best_aug_plus_tv | `exp_p2_combo_best_aug_plus_tv.yaml` | `train_pseudo_kfold` | 排程中 |
+| p2_combo_best_aug_plus_v2_tv | `exp_p2_combo_best_aug_plus_v2_tv.yaml` | `train_pseudo_kfold` | 排程中 |
 
 ---
 
@@ -3458,7 +3471,7 @@ py -3.13 -m src.tools.u10_per_task_tta `
 ### 56.5 結論
 
 1. **當前 SOTA 維持 Phase 38 AP-D4 = 0.71608**（未升級）。
-2. Phase 39 確認 §55.6「下一步候選 (b)」在當前單機資源**不可行**，將其從 backlog 移入 X 系列（[§57.3 X14 fine-grid hillclimb 無向量化加速](#573-已暫緩或證明不可行的方向避免重複嘗試)）。
+2. Phase 39 確認 §55.6「下一步候選 (b)」在當前單機資源**不可行**，將其從 backlog 移入 X 系列（[§59.3 X14 fine-grid hillclimb 無向量化加速](#593-已暫緩或證明不可行的方向避免重複嘗試)）。
 3. Phase 39 並非訓練動作，未新增任何 checkpoint、CSV 或 OOF；僅產出本章與一份空 log，作為負面消融的審計證據。
 4. 此 Phase 對於 README / REPRODUCE / ipynb **SOTA banner 不需更動**（仍為 0.71608），僅更新 Phase 軌跡表。
 
@@ -3504,6 +3517,165 @@ python -m src.tools.u10_per_task_tta `
 
 ---
 
+
+## 57. Phase 40 — 官方驗證集釋出後工程準備（2026-06-05）
+
+### 57.1 驗證集基本資訊
+
+| 項目 | 數值 |
+| :-- | :-- |
+| 檔案 | `vpesg4k_val_1000.csv`、`vpesg4k_val_1000.json` |
+| 筆數 | 1,000 |
+| 欄位 | 與訓練集相同 14 欄 |
+| 釋出日 | 2026-06-03 |
+| 放置路徑 | `data/raw/vpesg4k_val_1000.csv`（`data/` 在 .gitignore，不追蹤） |
+
+驗證集標籤分布：
+
+| 任務 | 標籤 | 筆數 |
+| :-- | :-- | :-- |
+| T1 promise_status | Yes | 813 |
+| T1 promise_status | No | 187 |
+| T2 verification_timeline | already | 352 |
+| T2 verification_timeline | between_2_and_5_years | 260 |
+| T2 verification_timeline | more_than_5_years | 180 |
+| T2 verification_timeline | within_2_years | 21 |
+| T2 verification_timeline | N/A（NaN in CSV）| 187 |
+| T3 evidence_status | Yes | 668 |
+| T3 evidence_status | No | 145 |
+| T3 evidence_status | N/A | 187 |
+| T4 evidence_quality | Clear | 566 |
+| T4 evidence_quality | Not_Clear | 101 |
+| T4 evidence_quality | Misleading | 1 |
+| T4 evidence_quality | N/A | 283 |
+
+### 57.2 關鍵發現：T2 標籤名稱差異
+
+驗證集 `verification_timeline` 使用 `more_than_5_years`，訓練集使用 `longer_than_5_years`。兩者語意相同，是主辦方命名不一致。
+
+**影響範圍**：
+- `src/data/loader.py` 的 `_validate_schema()` 會對驗證集中的 `more_than_5_years` 拋出 ValueError。
+- 所有訓練、評分、集成程式的 `LABEL_DOMAINS` 均含 `longer_than_5_years`。
+- 最終測試集（6/10 釋出）極可能也使用 `more_than_5_years`，故 **提交 CSV 需對應調整**。
+
+**決策（Phase 40 採納）**：
+- 在 `src/data/loader.py` 新增 `_LABEL_ALIASES` 字典，使 `_normalize_labels()` 在 load 時自動將 `more_than_5_years` 正規化為 `longer_than_5_years`。
+- `LABEL_DOMAINS`（loader / dataset / metrics）維持 `longer_than_5_years` 作為 canonical 標籤，避免任何訓練 checkpoint、LABEL2ID 與 OOF 評分邏輯需重刷。
+- 測試集提交時，若官方評分系統預期 `more_than_5_years`，需在提交產生步驟加入反向對映（尚待測試集釋出後確認）。
+
+```python
+# src/data/loader.py — 新增區塊（緊接 LABEL_DOMAINS 定義之後）
+_LABEL_ALIASES: dict[str, dict[str, str]] = {
+    "verification_timeline": {
+        "more_than_5_years": "longer_than_5_years",
+    },
+}
+```
+
+### 57.3 新增工具與腳本
+
+| 項目 | 路徑 | 功能 |
+| :-- | :-- | :-- |
+| label alias 正規化 | `src/data/loader.py` (`_LABEL_ALIASES` + `_normalize_labels` 更新) | val/test 載入時自動對映 more→longer |
+| U12 val gap 分析 | `scripts/u12_val_gap.py` | 用 AP-D4 checkpoints 推論 val 集、計算 val score、輸出 per-task drift 報告 |
+| U15 train+val 合併 | `scripts/u15_merge_train_val.py` | 合併訓練集與驗證集為 `data/processed/train_val_combined.csv` |
+| 8 個 TV 訓練設定檔 | `configs/exp_p2_combo_best*_tv.yaml` | 各 AP-D4 stem 的 train+val retraining 版本（seed 42，csv_path 指向 combined CSV）|
+| label 正規化測試 | `tests/test_loader.py` | 10 個測試覆蓋 alias、雙向、batch 與 schema 驗證 |
+
+### 57.4 U12 val gap 分析使用方式
+
+```powershell
+# 前提：AP-D4 checkpoints 已存在
+python -m scripts.u12_val_gap `
+  --data data/raw/vpesg4k_val_1000.csv `
+  --meta reports/analysis/_ensemble/ap_d4_8way_3view_meta.json `
+  --batch-size 16
+
+# 輸出：
+#   reports/analysis/u12_val_gap/u12_val_gap.json    # gap 報告 JSON
+#   reports/analysis/u12_val_gap/val_preds.csv       # val 集預測結果
+```
+
+**注意**：U12 需要 8 × 5 = 40 個 `outputs/checkpoints/{stem}/seed42/fold{f}/best.pt` checkpoint。
+若目前缺少（checkpoints 不在 git 中），需先重訓對應 stem 後再執行。
+
+### 57.5 測試狀態
+
+本 Phase 完成後全測試通過 60 個（Phase 39 後為 50 個，本次新增 10 個 label 正規化測試）。
+
+```text
+60 passed, 2 warnings in 10.49s
+```
+
+---
+
+## 58. Phase 41 — Train+Val 合併重訓設置（2026-06-05）
+
+### 58.1 動機
+
+官方 valid 釋出後，最終提交前可用資料從 1,000 筆增至 2,000 筆（train 1,000 + val 1,000）。
+用 2,000 筆重訓所有 AP-D4 stem，再以重訓後的 checkpoints 對測試集推論，是提升最終提交品質的標準動作。
+
+### 58.2 合併資料產生
+
+```powershell
+python -m scripts.u15_merge_train_val
+# 預期輸出：data/processed/train_val_combined.csv  (≤2000 rows)
+```
+
+- val 集的 `more_than_5_years` 會被 `load_dataset()` 自動正規化為 `longer_than_5_years`。
+- `data/processed/` 不在 git 中，需本地執行。
+
+### 58.3 8 個 TV 訓練設定檔
+
+| 設定檔 | 繼承自 | 改動 |
+| :-- | :-- | :-- |
+| `exp_p2_combo_best_tv.yaml` | `exp_p2_combo_best.yaml` | `exp_name`、`csv_path` → combined、`seeds: [42]` |
+| `exp_p2_combo_best_u10_pseudo_tv.yaml` | `exp_p2_combo_best_u10_pseudo.yaml` | 同上，`pseudo_csv_path` 繼承 |
+| `exp_p2_combo_best_u10_pseudo_v2_tv.yaml` | `exp_p2_combo_best_u10_pseudo_v2.yaml` | 同上 |
+| `exp_p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv.yaml` | `..._classw_focal_t4_g3.yaml` | 同上，class-weight + Focal 繼承 |
+| `exp_p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv.yaml` | `..._v3_classw_focal_t4_g3.yaml` | 同上，v3 pseudo 繼承 |
+| `exp_p2_combo_best_classw_focal_u6pro_tv.yaml` | `..._classw_focal_u6pro.yaml` | 同上，U6-pro BT + aug 繼承 |
+| `exp_p2_combo_best_aug_plus_tv.yaml` | `exp_p2_combo_best_aug_plus.yaml` | 同上，Aug-Plus v1 pseudo 繼承 |
+| `exp_p2_combo_best_aug_plus_v2_tv.yaml` | `exp_p2_combo_best_aug_plus_v2.yaml` | 同上，Aug-Plus v2 pseudo 繼承 |
+
+**設計決策**：只用 seed 42（single seed）。雙重理由：(a) 最終推論不依賴 CV fold，只需最佳 checkpoint；(b) 節省訓練時間，讓 6/10-6/17 推論窗口最大化。
+
+### 58.4 訓練指令（test 釋出前的時間窗口，2026-06-05 ~ 2026-06-10）
+
+純官方資料 stem（無 pseudo）：
+
+```powershell
+python -m src.train_kfold --config configs/exp_p2_combo_best_tv.yaml
+```
+
+pseudo 資料 stem（需 `data/processed/u10/pseudo_labels*.csv` 存在）：
+
+```powershell
+# 依序執行 7 個 pseudo stems
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_tv.yaml
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_v2_tv.yaml
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv.yaml
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv.yaml
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_classw_focal_u6pro_tv.yaml
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_aug_plus_tv.yaml
+python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_aug_plus_v2_tv.yaml
+```
+
+### 58.5 Phase 42 預告：TV 模型集成搜索
+
+train+val 重訓後，使用 U12 val gap 腳本的推論機制對 **測試集** 推論，再重跑 AP-D hillclimb 選出最終 ensemble 權重（TV checkpoints 無 OOF fold，故只有 stored 單視角）。
+
+| 子步驟 | 工具 | 輸入 |
+| :-- | :-- | :-- |
+| 測試集推論 | `scripts/u12_val_gap.py`（或獨立測試集腳本）| 8 個 `*_tv` checkpoints |
+| Ensemble 搜索 | `src/tools/u10_per_task_tta.py` | TV stem probabilities on test set |
+| 後處理 | `apply_constraints_batch` | 集成 argmax 結果 |
+| 提交守門 | `src/tools/validate_submission.py --mode submission` | 最終 CSV |
+
+Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成，且測試集已於 2026-06-10 釋出。
+
+
 <a id="part-v--附錄-appendix"></a>
 # Part V — 附錄 (Appendix)
 
@@ -3512,12 +3684,12 @@ python -m src.tools.u10_per_task_tta `
 
 ---
 
-## 57. Backlog 詳表（D1 ~ D30 + U1 ~ U12 全紀錄）
+## 59. Backlog 詳表（D1 ~ D30 + U1 ~ U12 全紀錄）
 
 > 本節為歷史審計用詳表。D 系列（D1~D30）為已完成的工程動作流水，U / N 系列（U1~U12 / N1~N3）為原始 backlog 候選清單。
-> X1~X14 禁區另列於 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)。
+> X1~X14 禁區另列於 [§59.3](#593-已暫緩或證明不可行的方向避免重複嘗試)。
 
-### 57.1 已完成項目（D 系列與 U/N 系列）
+### 59.1 已完成項目（D 系列與 U/N 系列）
 
 > D 系列為早期工程動作流水，編號停在 D30；Phase 26 之後的 U10、AP-D3、AP-D4 與 Phase 39 決策以各 Phase 章節為主紀錄。下列 D 表保留時間順序與對 SOTA 軌跡的貢獻。
 
@@ -3553,10 +3725,10 @@ python -m src.tools.u10_per_task_tta `
 | D28 | C1 / N3 — NeZha-base 不可訓（fallback 到 BertModel，fold0 0.549 中止）；轉 ERNIE-3.0-base-zh fallback，5 折 mean **0.6086** << 0.66 admission 門檻 | Phase 23 | NeZha：fold0 0.549 中止；ERNIE：0.6086（T2 −0.107、T4 −0.073 vs baseline）；**N3 candidate 全數失敗，不入池** | 0（拒絕）；列入 X11 風險區（base-class 異源 backbone 對本資料集不利） |
 | D29 | U2 / B3 — `p2_combo_best_ema995_warm` EMA decay=0.995 + warm-start 2 epoch（trainer.py 新增 `ema_warmup_epochs` + `ema_started`） | Phase 24 | member-level OOF **0.64941** vs baseline 0.66558（**−0.01617**）；T4 退化最嚴重（−0.062）；5 折全退化；未過 admission **不入 v12 池** | 0（拒絕）；列入 X12 風險區（EMA + warm-start 在 cosine 末段 LR ≠ 0 + 短訓練下仍傷 T4 macro） |
 | D30 | U6 / B4 — `p2_combo_best_u6_bt` NLLB-200-distilled-600M 中→英→中 回譯（T2 within_2_years×3 + T4 Misleading×5 / Not Clear×1；138 唯一源員 → 168 增強樣本；src/train_kfold.py 新增 aug 載入 / per-fold 注入機制，oof / valid 不收 aug） | Phase 25 | member-level OOF **0.66321** vs baseline 0.66558（**−0.00237**）；T2 macro 0.4652（−0.014）、T4 macro 0.4276（−0.031）；上加 fold1 轉譯品質離群（score 0.6334）拉低均值；未過 admission **不入 v12 池** | 0（拒絕）；列入 X13 風險區（NLLB-600M 保真度不足 + 無 round-trip ChrF 過濾 + 譯本帶入 label-noise） |
-<a id="571-已完成項目done--含成果"></a>
-#### 57.1.1 U/N 系列完成項目與成果
+<a id="591-已完成項目done--含成果"></a>
+#### 59.1.1 U/N 系列完成項目與成果
 
-> 補充 D 表之外、以 U / N 編號追蹤的項目。X1~X13 禁區詳 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)。
+> 補充 D 表之外、以 U / N 編號追蹤的項目。X1~X13 禁區詳 [§59.3](#593-已暫緩或證明不可行的方向避免重複嘗試)。
 
 | ID | 項目 | 結果 | 紀錄位置 |
 | :--: | :-- | :-- | :-- |
@@ -3570,20 +3742,21 @@ python -m src.tools.u10_per_task_tta `
 | U11 | StratifiedGroupKFold by company sanity | 完成（診斷） | §40 |
 | U12 | OOF cross-fold variance | 完成（診斷；valid gap 待 6/03 釋出） | §41 |
 
-### 57.2 未完成或可重啟項目（TODO / Candidate）
+### 59.2 未完成或可重啟項目（TODO / Candidate）
 
-> 本節已依 Phase 39 後狀態校訂。2026-05-10 版 backlog 中的 U10 TTA、class-weighted CE / Focal-T4、M3-v3 corpus 與 AP-D 路線已分別在 §47~§56 完成、採納或拒絕；下列只保留截至 2026-05-25 仍未完成、等待外部事件，或可在新條件下重啟的項目。
+> 本節已依 Phase 40-41 狀態更新。
 
-#### 57.2.1 等待 valid/test 的必要動作
+#### 59.2.1 等待 valid/test 的必要動作
 
 | ID | 項目 | 狀態 | 啟動條件 | 產出 |
 | :--: | :-- | :-- | :-- | :-- |
-| F1 | AP-D4 / AP-D3 / Phase36 valid 校準 | 待辦 | 2026-06-03 valid 釋出 | valid score、per-task drift、submission anchor 建議 |
-| F2 | 最終提交檔 schema 與 hierarchy 守門 | 本地 validator 已完成；final 格式仍待確認 | test 格式或官方範例確認 | `validate_submission` 檢查紀錄、最終 submission 欄位對齊 |
-| F3 | Submission anchor 分配策略 | 待辦 | valid 校準後 | 21 次提交額度的主線與 fallback 順序 |
+| F1 | AP-D4 / AP-D3 / Phase36 valid 校準 | **工具完成；待首次執行** | AP-D4 TV checkpoints 訓練完成後執行 `scripts/u12_val_gap.py` | valid score、per-task drift、submission anchor 建議 |
+| F2 | 最終提交檔 schema 與 hierarchy 守門 | **本地 validator 已完成**；final 格式仍待 test 確認 | test 格式或官方範例確認 | `validate_submission` 檢查紀錄、最終 submission 欄位對齊 |
+| F3 | Submission anchor 分配策略 | **Phase 42 定案** | 2026-06-10 test 釋出後 | 21 次提交額度的主線與 fallback 順序 |
+| **F9** | **Phase 41 8-stem 重訓** | **進行中 (stem 1/8 訓練中)** | **`data/processed/train_val_combined.csv` 已就緒** | 8 個 TV checkpoints，提供 Phase 42 推論基礎 |
 
-<a id="5622-下一輪可動執行路線v30-校訂-2026-05-10"></a>
-#### 57.2.2 可做但需前置條件的 Phase 40+ 候選
+<a id="5922-下一輪可動執行路線v30-校訂-2026-05-10"></a>
+#### 59.2.2 可做但需前置條件的 Phase 40+ 候選
 
 | ID | 名稱 | 就緒度 | 重訓 | 前置條件 | 決策原則 |
 | :--: | :-- | :-- | :--: | :-- | :-- |
@@ -3593,16 +3766,16 @@ python -m src.tools.u10_per_task_tta `
 | F7 | T4 Misleading / T2 minority 專項重訓 | 暫緩 | 可能 | valid 顯示特定 minority 類仍可收益 | 避免 global sampler 對其他任務造成副作用 |
 | F8 | 跨家族 teacher / Qwen-LoRA | 阻塞 | 是 | 16 GB+ GPU 或新訓練策略 | 不重跑已拒絕的 XLM-R / ELECTRA / NeZha / ERNIE 同設定 |
 
-#### 57.2.3 歷史暫緩 / 阻塞 backlog
+#### 59.2.3 歷史暫緩 / 阻塞 backlog
 
 | ID | 項目 | 狀態 | 阻塞原因 | 現行處理 |
 | :--: | :-- | :-- | :-- | :-- |
 | U8 | Pipeline B-Plan T1 → T3 → T2/T4 串接 | 暫緩 | 需 valid gap 與 error pattern 支持 | 若 valid 顯示 hierarchy error 是主因再重啟 |
 | U9 | Qwen2.5-7B LoRA 4-bit r=16 | 阻塞 | RTX 5060 Laptop 8 GB 不足，需 16 GB+ 顯存 | 併入 F8 長期路線 |
 
-> **禁區提醒**：X1 ~ X14 詳見 [§57.3](#573-已暫緩或證明不可行的方向避免重複嘗試)，本輪嚴格遵守。
+> **禁區提醒**：X1 ~ X14 詳見 [§59.3](#593-已暫緩或證明不可行的方向避免重複嘗試)，本輪嚴格遵守。
 
-### 57.3 已暫緩或證明不可行的方向（避免重複嘗試）
+### 59.3 已暫緩或證明不可行的方向（避免重複嘗試）
 
 | # | 項目 | 結果 | 原因 |
 | :--: | :-- | :-- | :-- |
@@ -3622,19 +3795,19 @@ python -m src.tools.u10_per_task_tta `
 
 ---
 
-## 58. 工程上限拆解（推導依據）
+## 60. 工程上限拆解（推導依據）
 
 > 本節說明本專案聲稱的「加權保守上限 ≈ 0.7236 / 加權寬鬆上限 ≈ 0.7570」是如何得出的。
 > 包含兩種上限的定義、per-task 拆解推導，以及 T4 `Misleading` (support=1) 為何構成統計硬上限。
-> 與「如何突破上限」相關的執行路線見 [§57.2.2 下一輪可動執行路線](#5622-下一輪可動執行路線v30-校訂-2026-05-10)。
+> 與「如何突破上限」相關的執行路線見 [§59.2.2 下一輪可動執行路線](#5922-下一輪可動執行路線v30-校訂-2026-05-10)。
 
-### 58.1 兩種上限的定義
+### 60.1 兩種上限的定義
 
 **(A) 演算法上限 / Bayes-optimal**：給定特徵分布下，最佳分類器能達到的分數。理論存在但**不可直接量測**；通常以「人工標註者一致性 (Inter-Annotator Agreement, IAA)」作代理估計。例如：若兩位標註員意見不同的比例 = 8%，則 IAA ≈ 0.92，此即實務上限。
 
 **(B) 工程上限 / Engineering ceiling**：給定固定資料集 + 固定評分公式下，所有合理技術組合可達的上限。比 (A) 嚴格但可逼近；用「per-class F1 拆解」估算。本表所列即為 (B)。
 
-### 58.2 per-task 上限拆解（推導依據）
+### 60.2 per-task 上限拆解（推導依據）
 
 > 注意：本節原始估算建立於 Phase 18 active path 時代，保留作為歷史工程上限推導。Phase 38 AP-D4 已把 weighted score 推進至 0.71608，且 T2 已高於早期寬鬆估計；因此本節不再視為嚴格上限，而是用來說明「分數天花板主要由 T4 與少數類統計變異決定」的推導脈絡。
 
@@ -3652,7 +3825,7 @@ python -m src.tools.u10_per_task_tta `
 
 → 「**0.72 ~ 0.74**」這個區間為早期工程估計；Phase 38 AP-D4 已接近或超過部分早期假設，後續需以 [§14](#roadmap) 的 valid 校準與提交策略重新定義下一階段目標。U10 路線詳見 [§47.12](#47-u10--企業永續報告書-sr-弱監督-pipeline-完整版2026-05-09-重啟2026-05-10-v2-重訓)。
 
-### 58.3 為什麼 T4 `Misleading` (support=1) 是真正的硬上限？
+### 60.3 為什麼 T4 `Misleading` (support=1) 是真正的硬上限？
 
 T4 的 label domain 是 4 類（Clear / Not Clear / Misleading / N/A）。macro-F1 對 4 個類別等權平均。若有一類 support=1：
 - 模型若預測對：該類 F1 = 1.0
@@ -3663,9 +3836,9 @@ T4 的 label domain 是 4 類（Clear / Not Clear / Misleading / N/A）。macro-
 
 ---
 
-## 59. 競賽規則對外部資料的立場（已確認可用）
+## 61. 競賽規則對外部資料的立場（已確認可用）
 
-### 59.1 主辦方 2026-05-17 Q&A 裁示（摘錄）
+### 61.1 主辦方 2026-05-17 Q&A 裁示（摘錄）
 
 > **來源**：主辦單位 2026-05-17 公開 Q&A 回覆（依使用者轉述整理；待主辦原文回覆檔上線後以原文取代下方摘要）。
 >
@@ -3681,7 +3854,7 @@ T4 的 label domain 是 4 類（Clear / Not Clear / Misleading / N/A）。macro-
 > - 50 列人手繁中種子均**獨立撰寫**，不抄自官方 1,000 列或任何受版權保護來源；經 7 道品質閘過濾後 47 列入訓。
 > - 測試集絕對隔離（與 Phase 1 以來 invariants 一致），AP 衍生資料僅進 train+pseudo pool。
 
-### 59.2 規則原文比對
+### 61.2 規則原文比對
 
 逐字檢視官方文件 [ESG_永續承諾驗證競賽_2026.md §八「競賽規則與注意事項」](ESG_永續承諾驗證競賽_2026.md)，禁止項目僅有以下五條：
 
@@ -3699,161 +3872,3 @@ T4 的 label domain 是 4 類（Clear / Not Clear / Misleading / N/A）。macro-
 - 偽標噪聲與分布偏移風險已透過兩階段訓練隔離；不得將 pseudo 視為人工標註真值。
 
 ---
-
-## 60. Phase 40 — 官方驗證集釋出後工程準備（2026-06-05）
-
-### 60.1 驗證集基本資訊
-
-| 項目 | 數值 |
-| :-- | :-- |
-| 檔案 | `vpesg4k_val_1000.csv`、`vpesg4k_val_1000.json` |
-| 筆數 | 1,000 |
-| 欄位 | 與訓練集相同 14 欄 |
-| 釋出日 | 2026-06-03 |
-| 放置路徑 | `data/raw/vpesg4k_val_1000.csv`（`data/` 在 .gitignore，不追蹤） |
-
-驗證集標籤分布：
-
-| 任務 | 標籤 | 筆數 |
-| :-- | :-- | :-- |
-| T1 promise_status | Yes | 813 |
-| T1 promise_status | No | 187 |
-| T2 verification_timeline | already | 352 |
-| T2 verification_timeline | between_2_and_5_years | 260 |
-| T2 verification_timeline | more_than_5_years | 180 |
-| T2 verification_timeline | within_2_years | 21 |
-| T2 verification_timeline | N/A（NaN in CSV）| 187 |
-| T3 evidence_status | Yes | 668 |
-| T3 evidence_status | No | 145 |
-| T3 evidence_status | N/A | 187 |
-| T4 evidence_quality | Clear | 566 |
-| T4 evidence_quality | Not_Clear | 101 |
-| T4 evidence_quality | Misleading | 1 |
-| T4 evidence_quality | N/A | 283 |
-
-### 60.2 關鍵發現：T2 標籤名稱差異
-
-驗證集 `verification_timeline` 使用 `more_than_5_years`，訓練集使用 `longer_than_5_years`。兩者語意相同，是主辦方命名不一致。
-
-**影響範圍**：
-- `src/data/loader.py` 的 `_validate_schema()` 會對驗證集中的 `more_than_5_years` 拋出 ValueError。
-- 所有訓練、評分、集成程式的 `LABEL_DOMAINS` 均含 `longer_than_5_years`。
-- 最終測試集（6/10 釋出）極可能也使用 `more_than_5_years`，故 **提交 CSV 需對應調整**。
-
-**決策（Phase 40 採納）**：
-- 在 `src/data/loader.py` 新增 `_LABEL_ALIASES` 字典，使 `_normalize_labels()` 在 load 時自動將 `more_than_5_years` 正規化為 `longer_than_5_years`。
-- `LABEL_DOMAINS`（loader / dataset / metrics）維持 `longer_than_5_years` 作為 canonical 標籤，避免任何訓練 checkpoint、LABEL2ID 與 OOF 評分邏輯需重刷。
-- 測試集提交時，若官方評分系統預期 `more_than_5_years`，需在提交產生步驟加入反向對映（尚待測試集釋出後確認）。
-
-```python
-# src/data/loader.py — 新增區塊（緊接 LABEL_DOMAINS 定義之後）
-_LABEL_ALIASES: dict[str, dict[str, str]] = {
-    "verification_timeline": {
-        "more_than_5_years": "longer_than_5_years",
-    },
-}
-```
-
-### 60.3 新增工具與腳本
-
-| 項目 | 路徑 | 功能 |
-| :-- | :-- | :-- |
-| label alias 正規化 | `src/data/loader.py` (`_LABEL_ALIASES` + `_normalize_labels` 更新) | val/test 載入時自動對映 more→longer |
-| U12 val gap 分析 | `scripts/u12_val_gap.py` | 用 AP-D4 checkpoints 推論 val 集、計算 val score、輸出 per-task drift 報告 |
-| U15 train+val 合併 | `scripts/u15_merge_train_val.py` | 合併訓練集與驗證集為 `data/processed/train_val_combined.csv` |
-| 8 個 TV 訓練設定檔 | `configs/exp_p2_combo_best*_tv.yaml` | 各 AP-D4 stem 的 train+val retraining 版本（seed 42，csv_path 指向 combined CSV）|
-| label 正規化測試 | `tests/test_loader.py` | 10 個測試覆蓋 alias、雙向、batch 與 schema 驗證 |
-
-### 60.4 U12 val gap 分析使用方式
-
-```powershell
-# 前提：AP-D4 checkpoints 已存在
-python -m scripts.u12_val_gap `
-  --data data/raw/vpesg4k_val_1000.csv `
-  --meta reports/analysis/_ensemble/ap_d4_8way_3view_meta.json `
-  --batch-size 16
-
-# 輸出：
-#   reports/analysis/u12_val_gap/u12_val_gap.json    # gap 報告 JSON
-#   reports/analysis/u12_val_gap/val_preds.csv       # val 集預測結果
-```
-
-**注意**：U12 需要 8 × 5 = 40 個 `outputs/checkpoints/{stem}/seed42/fold{f}/best.pt` checkpoint。
-若目前缺少（checkpoints 不在 git 中），需先重訓對應 stem 後再執行。
-
-### 60.5 測試狀態
-
-本 Phase 完成後全測試通過 60 個（Phase 39 後為 50 個，本次新增 10 個 label 正規化測試）。
-
-```text
-60 passed, 2 warnings in 10.49s
-```
-
----
-
-## 61. Phase 41 — Train+Val 合併重訓設置（2026-06-05）
-
-### 61.1 動機
-
-官方 valid 釋出後，最終提交前可用資料從 1,000 筆增至 2,000 筆（train 1,000 + val 1,000）。
-用 2,000 筆重訓所有 AP-D4 stem，再以重訓後的 checkpoints 對測試集推論，是提升最終提交品質的標準動作。
-
-### 61.2 合併資料產生
-
-```powershell
-python -m scripts.u15_merge_train_val
-# 預期輸出：data/processed/train_val_combined.csv  (≤2000 rows)
-```
-
-- val 集的 `more_than_5_years` 會被 `load_dataset()` 自動正規化為 `longer_than_5_years`。
-- `data/processed/` 不在 git 中，需本地執行。
-
-### 61.3 8 個 TV 訓練設定檔
-
-| 設定檔 | 繼承自 | 改動 |
-| :-- | :-- | :-- |
-| `exp_p2_combo_best_tv.yaml` | `exp_p2_combo_best.yaml` | `exp_name`、`csv_path` → combined、`seeds: [42]` |
-| `exp_p2_combo_best_u10_pseudo_tv.yaml` | `exp_p2_combo_best_u10_pseudo.yaml` | 同上，`pseudo_csv_path` 繼承 |
-| `exp_p2_combo_best_u10_pseudo_v2_tv.yaml` | `exp_p2_combo_best_u10_pseudo_v2.yaml` | 同上 |
-| `exp_p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv.yaml` | `..._classw_focal_t4_g3.yaml` | 同上，class-weight + Focal 繼承 |
-| `exp_p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv.yaml` | `..._v3_classw_focal_t4_g3.yaml` | 同上，v3 pseudo 繼承 |
-| `exp_p2_combo_best_classw_focal_u6pro_tv.yaml` | `..._classw_focal_u6pro.yaml` | 同上，U6-pro BT + aug 繼承 |
-| `exp_p2_combo_best_aug_plus_tv.yaml` | `exp_p2_combo_best_aug_plus.yaml` | 同上，Aug-Plus v1 pseudo 繼承 |
-| `exp_p2_combo_best_aug_plus_v2_tv.yaml` | `exp_p2_combo_best_aug_plus_v2.yaml` | 同上，Aug-Plus v2 pseudo 繼承 |
-
-**設計決策**：只用 seed 42（single seed）。雙重理由：(a) 最終推論不依賴 CV fold，只需最佳 checkpoint；(b) 節省訓練時間，讓 6/10-6/17 推論窗口最大化。
-
-### 61.4 訓練指令（test 釋出前的時間窗口，2026-06-05 ~ 2026-06-10）
-
-純官方資料 stem（無 pseudo）：
-
-```powershell
-python -m src.train_kfold --config configs/exp_p2_combo_best_tv.yaml
-```
-
-pseudo 資料 stem（需 `data/processed/u10/pseudo_labels*.csv` 存在）：
-
-```powershell
-# 依序執行 7 個 pseudo stems
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_tv.yaml
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_v2_tv.yaml
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv.yaml
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv.yaml
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_classw_focal_u6pro_tv.yaml
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_aug_plus_tv.yaml
-python -m src.train_pseudo_kfold --config configs/exp_p2_combo_best_aug_plus_v2_tv.yaml
-```
-
-### 61.5 Phase 42 預告：TV 模型集成搜索
-
-train+val 重訓後，使用 U12 val gap 腳本的推論機制對 **測試集** 推論，再重跑 AP-D hillclimb 選出最終 ensemble 權重（TV checkpoints 無 OOF fold，故只有 stored 單視角）。
-
-| 子步驟 | 工具 | 輸入 |
-| :-- | :-- | :-- |
-| 測試集推論 | `scripts/u12_val_gap.py`（或獨立測試集腳本）| 8 個 `*_tv` checkpoints |
-| Ensemble 搜索 | `src/tools/u10_per_task_tta.py` | TV stem probabilities on test set |
-| 後處理 | `apply_constraints_batch` | 集成 argmax 結果 |
-| 提交守門 | `src/tools/validate_submission.py --mode submission` | 最終 CSV |
-
-Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成，且測試集已於 2026-06-10 釋出。
-
