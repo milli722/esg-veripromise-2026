@@ -548,7 +548,7 @@ esg-veripromise-2026/
 
 ### 14.5 Phase 41.5 — TV 池 OOF 集成驗證（Phase 42 前置）
 
-測試集於 2026-06-11 仍未在本機（官方原定 6/10 釋出），Phase 42（測試集推論）暫時被阻塞。但已用 8 個 TV stem 的 2,000-row OOF 跑 post-constraint **joint hillclimb**（工具：`scripts/u16_tv_oof_ensemble.py`），取得最接近預期測試表現的代理分數，並作為 Phase 42 推論的 warm-start 權重。
+在測試集釋出前，先用 8 個 TV stem 的 2,000-row OOF 跑 post-constraint **joint hillclimb**（工具：`scripts/u16_tv_oof_ensemble.py`），取得最接近預期測試表現的代理分數，並作為 Phase 42 推論的 warm-start 權重。測試集已於 2026-06-11 釋出，Phase 42 推論與提交已完成（見 [§58.7](#587-phase-42--測試集推論與最終提交2026-06-11-完成)）。
 
 | 指標 | 分數 |
 | :-- | :--: |
@@ -3696,7 +3696,7 @@ train+val 重訓後，使用 U12 val gap 腳本的推論機制對 **測試集** 
 | 後處理 | `apply_constraints_batch` | 集成 argmax 結果 |
 | 提交守門 | `src/tools/validate_submission.py --mode submission` | 最終 CSV |
 
-Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成（✅ 2026-06-11 達成），且測試集釋出（⏳ 官方原定 2026-06-10，截至 2026-06-11 本機尚未取得）。
+Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成（✅ 2026-06-11 達成），且測試集釋出（✅ 2026-06-11 本機取得 `vpesg4k_test_2000.csv`）。
 
 ### 58.6 Phase 41 重訓成果與 TV 池 OOF 集成（2026-06-11）
 
@@ -3712,12 +3712,44 @@ Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成（✅ 2026-06-11 達
 
 集成權重已存至 `reports/analysis/_ensemble/tv_oof_ensemble_meta.json`，作為 Phase 42 測試集推論的 warm-start。詳細分析與過擬合警示見 [§14.5](#145-phase-415--tv-池-oof-集成驗證phase-42-前置)。
 
-**Phase 42 推論流程（待測試集釋出）**：
+### 58.7 Phase 42 — 測試集推論與最終提交（2026-06-11 完成）
 
-1. 用 8 個 `*_tv` checkpoints（每 stem 5 folds 平均）對測試集做 stored-view 推論。
+測試集 `vpesg4k_test_2000.csv`（id 12001–14000，2,000 段落）於 2026-06-11 釋出。工具 `scripts/u17_phase42_test_inference.py` 完成端到端推論與提交產出。
+
+**提交格式關鍵規則**（依官方 `AI_CUP_2026_VeriPromiseESG_Submission_Guidelines.pdf`）：
+
+- 5 欄固定順序：`id,promise_status,verification_timeline,evidence_status,evidence_quality`（不含 promise/evidence 字串欄）。
+- `verification_timeline` 使用 **`more_than_5_years`**（非訓練集 canonical 的 `longer_than_5_years`）；輸出時自動 remap。
+- N/A 一律為字面字串 `"N/A"`，任何欄位不得空白或 NaN；2,000 列、id 嚴格 12001–14000、大小寫敏感。
+- 邏輯規則：promise=No → 下游三欄全 N/A；promise=Yes → timeline≠N/A、evidence∈{Yes,No}；evidence=Yes → quality∈{Clear,Not Clear,Misleading}；evidence=No → quality=N/A。
+
+**推論流程**：
+
+1. 8 個 `*_tv` checkpoints（每 stem 5 folds 機率平均）對 2,000 列做 stored-view 推論（macbert-base / cls_mean / maxlen 384）。
 2. 套用 `tv_oof_ensemble_meta.json` 的 per-task stem 權重混合。
-3. `apply_constraints_batch` 後處理 → `validate_submission --mode submission` 守門。
-4. 並列 fallback：等權混合、最佳單 stem，供 anchor 分配。
+3. **約束式解碼**：promise=Yes 的列在 timeline/evidence/quality 上排除 N/A 類別取 argmax（ground-truth promise=Yes 從不帶 N/A，故 ≥ 純 argmax 且保證合規），再經 `apply_constraints_batch` 收尾。
+4. `validate_submission --mode preds` 守門 → 寫出三份提交（主集成 + 等權 + 最佳單 stem fallback）。
+
+**產出檔案**（`outputs/submissions/`）：
+
+| 檔案 | 說明 |
+| :-- | :-- |
+| `phase42_tv_ensemble_submission.csv` | **主提交**（per-task hillclimb 權重，OOF 代理 0.71033）|
+| `phase42_tv_ensemble_preds.csv` | 內部 canonical-label preds（已過 `validate_submission --mode preds`）|
+| `phase42_equalweight_submission.csv` | fallback：等權 8-stem 混合 |
+| `phase42_bestsingle_submission.csv` | fallback：最佳單 stem（u10_pseudo_v2_tv）|
+
+**主提交 label 分布**（2,000 列、無空白/NaN、id 12001–14000 唯一、5 欄順序正確）：
+
+| 任務 | 分布 |
+| :-- | :-- |
+| promise_status | Yes=1724, No=276 |
+| verification_timeline | already=754, between_2_and_5_years=522, more_than_5_years=417, N/A=276, within_2_years=31 |
+| evidence_status | Yes=1470, N/A=276, No=254 |
+| evidence_quality | Clear=1267, N/A=530, Not Clear=203 |
+
+> **約束一致性**：promise=No 的 276 列在三個下游欄位皆為 N/A（276 完全對齊），evidence_status≠Yes 的列其 quality 全 N/A（530 = 276 promise-No + 254 evidence-No），結構守門全數通過。
+> **HF 403 提示為非致命背景雜訊**：`hfl/chinese-macbert-base` discussions API 被停用所致，模型權重仍正常載入；可用 `HF_HUB_OFFLINE=1` 抑制。
 
 
 <a id="part-v--附錄-appendix"></a>
