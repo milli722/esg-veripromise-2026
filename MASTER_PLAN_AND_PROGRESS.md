@@ -3877,6 +3877,50 @@ Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成（✅ 2026-06-11 達
 
 > **Phase 45 META 教訓**：(1) **對抗驗證**是上傳前必做的廉價步驟——AUC≈0.5 直接排除了 domain-shift 類修正與 importance 重訓，避免浪費額度與算力。(2) 當輸入無 shift 且信心分布一致時，巨大的 LB↔OOF 落差最可能來自**標註慣例差異或 OOF 樂觀**，此時閾值修正僅為弱槓桿，應**溫和探針 + 控制組隔離**，而非激進下注。(3) 每次上傳都應**只改變一個變因**（c1 隔離 macro、t1only/t3only 隔離單任務）以確保 LB 回饋可解讀。
 
+### 58.11 Phase 46 — 超越 0.61：macro-only 加權 + 多視窗 TTA 雙槓桿（2026-06-12）
+
+目標：第 1 名 0.61，我方 0.6037 排名 11，需 **+0.0065**。Phase 45 已證實 (a) 無 domain shift、(b) macro 任務 T2/T4 忠實轉移、(c) 二元崩塌不可約。因此放棄二元閾值修正（弱槓桿），改攻**兩個本機可驗證、非過擬合的真實槓桿**：
+
+#### 58.11.1 槓桿 A — macro-only OOF 加權（`scripts/u23_macro_weighting.py`）
+
+關鍵洞察：Phase 42 joint hillclimb（OOF 0.71044）在 LB 崩盤（0.5962）是因為它**同時移動了二元任務權重**而對 OOF 過擬合。但 macro 任務忠實轉移 ⇒ **只**對 T2/T4 的 stem-mix 權重做 post-constraint hillclimb、**凍結 T1/T3 於等權**，其 OOF 增益應可轉移。結果：
+
+| | OOF | T1 | T2 | T3 | T4 |
+| :-- | :--: | :--: | :--: | :--: | :--: |
+| 等權 | 0.69759 | 0.9409 | 0.6053 | 0.8606 | 0.4584 |
+| macro-opt | **0.70208** | 0.9409 | **0.6286** | 0.8606 | 0.4612 |
+| 增益 | **+0.00449** | — | **+0.0233** | — | +0.0028 |
+
+T1/T3 確認凍結於等權；增益幾乎全來自 T2（+0.0233）。因 T2 忠實轉移，此 +0.0045 預期可帶到 LB。
+
+#### 58.11.2 槓桿 B — 多視窗 TTA（`scripts/u24_tta_inference.py` + `u25_tta_combine.py`）
+
+8 個 TV stem 皆以 max_length=384 **head 截斷**訓練/推論（stored view）。診斷發現 **792/2000（~40%）測試段落超過 384 token**，head 截斷丟失尾段——而 ESG 承諾／證據敘述常落在段落尾部（專案 notebook §13.2）。因無 domain shift，**訊號回收**（而非重加權）是最有望破 0.61 的真槓桿。
+
+實作：對每個 stem 額外推論 **middle**（中段 W-2 token）與 **tail**（尾段 W-2 token）視角，手動加 `[CLS]`/`[SEP]`（transformers 5.6 的 `build_inputs_with_special_tokens` 不可靠，依記憶）。三視角等權平均（TV stem 無 middle/tail OOF，無法離線調視角權重；等權為穩健標準作法，且為專案 U1 TTA 提升飽和集成的同一手法）。
+
+#### 58.11.3 Phase 46 候選集（全部過 `validate --mode preds`，2000 列）
+
+| 候選 | 槓桿 | macro corr | T4 NotClear | T4 Misleading | 隔離用途 |
+| :-- | :-- | :--: | :--: | :--: | :-- |
+| `phase46_mw_none` | A（stored 加權）| — | 9.8% | 0.0% | 純加權效果 |
+| `phase46_mw_a02` | A | 0.2 | 15.9% | 0.1% | A + 溫和修正 |
+| `phase46_mw_a03` | A | 0.3 | 21.6% | **0.7%** | A + c3 同設定（隔離 A vs c3）|
+| `phase46_tta_plain` | B（TTA）| — | 8.8% | 0.0% | 純 TTA 效果 |
+| `phase46_tta_macro_a02` | B | 0.2 | 14.2% | 0.1% | B + 溫和修正 |
+| `phase46_tta_macro_a03` | B | 0.3 | 17.6% | 0.1% | B + c3 同設定（隔離 B vs c3）|
+| `phase46_tta_macrow_a02` | **A+B** | 0.2 | 15.8% | 0.1% | **全疊加（破 0.61 最強候選）** |
+
+注意 `mw_a03` 首次預測 `Misleading` 0.7%（其餘全 0.0%）——T4 macro F1 含 Misleading 類，若測試集確有 Misleading 樣本，此候選可解開該類的結構性 0 分上限。
+
+#### 58.11.4 上傳排程（每日 3 次；已銀行 c3=0.6037）
+
+1. **`phase46_tta_macrow_a02`**（全疊加 A+B+corr0.2）— 破 0.61 的最強單發。兩槓桿皆只作用於 macro 任務/新增視角，不動二元決策，疊加風險低。
+2. **`phase46_mw_a03`**（僅槓桿 A + corr0.3）— 隔離已 OOF 驗證的 A（vs c3）。若 > c3 ⇒ 加權轉移確立。與步驟 1 對比可判斷 TTA（B）是否有貢獻。
+3. **`phase46_tta_macro_a03`**（僅槓桿 B + corr0.3）— 隔離 TTA（vs c3）。三發合起來可完整拆解 A、B、A+B 的 LB 貢獻。
+
+> **Phase 46 META 教訓**：(1) 當 LB↔OOF 落差被歸因於某些任務（二元）時，可對**忠實轉移的任務（macro）單獨做 OOF 加權並凍結其餘**——這把「整體 hillclimb 過擬合」拆解為「可轉移子問題」，是繞過 OOF 過擬合的通用手法。(2) 無 domain shift 時，**訊號回收型 TTA（多 token 視窗）**優於任何重加權/閾值修正，因為它真正增加資訊；先量測截斷比例（此處 40%）確認 TTA 母體再投入算力。(3) 評分函式細節決定槓桿：T4 macro 含 `Misleading`/`N/A` 四類且權重最高（0.35），故任何能讓模型偶爾預測稀有類的修正都可能解開結構性上限。
+
 
 <a id="part-v--附錄-appendix"></a>
 # Part V — 附錄 (Appendix)
