@@ -487,8 +487,8 @@ esg-veripromise-2026/
 | 2 | F2 | 最終提交檔與 schema 清理 | 避免格式或約束錯誤 | 低 | validator 已完成；仍待 test 格式確認 |
 | 3 | F3 | Submission anchor 設計 | 21 次提交額度內找穩定解 | 中 | 規劃中；Phase 42 時定案 |
 | 4 | F4 | AP-D5 搜尋向量化、cache 或替代 optimizer | 降低搜尋成本，讓後續 AP-D5 可在小預算內試 | 中 | **已完成**：fast evaluator + random refinement；不重跑舊版 X14 |
-| 5 | **F9** | **Phase 41 Train+Val 8-stem 重訓** | 2× 資料量、最終 checkpoint，提升測試集推論品質 | 低 | **進行中（2026-06-05~06-10）**：stem 1/8 訓練中 |
-| 6 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 新成員 diversity，理論上比 fine grid 更可能突破 | 中高 | 待 Phase 41 完成後 ROI 重估 |
+| 5 | **F9** | **Phase 41 Train+Val 8-stem 重訓** | 2× 資料量、最終 checkpoint，提升測試集推論品質 | 低 | **✅ 已完成（2026-06-11）**：8 stems 全數重訓 + TV 池 OOF 集成驗證（見 §14.4 / §14.5）|
+| 6 | F5 | stem #9：U13 LLM 評審重標 U10 偽標 | 新成員 diversity，理論上比 fine grid 更可能突破 | 中高 | 待 Phase 42（測試集）後 ROI 重估 |
 | 7 | F6 | 外部 provider LLM 合成與人工抽樣 review | 擴大 T4/T2 minority 合成來源 | 中高 | 需規則、成本與品質閘門 |
 | 8 | F7 | T4 Misleading / T2 minority 專項 | 理論上限高，但極易 overfit | 高 | 暫緩至 valid 有訊號 |
 | 9 | F8 | 跨家族 teacher / Qwen-LoRA | 可能打破同 teacher 上限 | 高 | 需更大 GPU 或新策略 |
@@ -506,7 +506,7 @@ esg-veripromise-2026/
 
 | 類型 | 事項 | 啟動條件 | 決策原則 |
 | :-- | :-- | :-- | :-- |
-| **進行中** | **F9 Phase 41 Train+Val 8-stem 重訓** | **2026-06-05 已啟動，2026-06-10 前完成** | stem 1 (p2_combo_best_tv) 訓練中；完成後進 Phase 42 集成搜索 |
+| ✅ 已完成 | **F9 Phase 41 Train+Val 8-stem 重訓** | **2026-06-05 啟動，2026-06-11 全部完成** | 8 stems 全數重訓（見 §14.4）；TV 池 OOF 集成驗證完成（見 §14.5）；等待測試集進 Phase 42 |
 | 已完成本地工程 | F4 `_eval_full` fast evaluator、權重 tensor cache、budgeted random refinement | 已完成；不依賴 valid/test | 已用 synthetic AP-D cache 等價測試確認與舊 `_eval_full` score/preds 一致；後續只跑小預算 refinement，不回到舊版全量 fine-grid |
 | 已完成工程準備 | F1 valid 校準（label fix + U12 腳本）| 2026-06-03 valid 已釋出；工具就緒；推論待 checkpoints 建好後執行 | 優先選 valid drift 最小的 anchor，不只看 OOF 最高；上傳前必跑 `validate_submission` |
 | 已完成本地工程 | F2 submission validator | 已完成；不依賴 valid/test | 可先檢內部 `*_preds.csv`，final submission 仍需補足官方要求欄位 |
@@ -525,18 +525,41 @@ esg-veripromise-2026/
 | 小預算 refinement | 新增 `--random-refine-iters`、`--random-refine-step`、`--random-seed` | 測試確認 refinement 不接受退步候選，simplex 權重和維持為 1 | 後續可用於 AP-D5 小預算試跑；不回到無向量化全量 grid 0.05 |
 | submission guardrail | `src/tools/validate_submission.py` | `tests/test_validate_submission.py`、`tests/test_post_process.py`、全測試 60 passed（Phase 40 後）| 上傳前必跑，並用 `keep_default_na=False` 保留字串 `N/A` |
 
-### 14.4 Phase 41 Train+Val 重訓狀態（2026-06-05 啟動）
+### 14.4 Phase 41 Train+Val 重訓狀態（2026-06-05 啟動 → 2026-06-11 全部完成）
 
-| Stem | Config | 訓練腳本 | 狀態 |
-| :-- | :-- | :-- | :-- |
-| p2_combo_best_tv | `exp_p2_combo_best_tv.yaml` | `train_kfold` | **訓練中** |
-| p2_combo_best_u10_pseudo_tv | `exp_p2_combo_best_u10_pseudo_tv.yaml` | `train_pseudo_kfold` | 排程中 |
-| p2_combo_best_u10_pseudo_v2_tv | `exp_p2_combo_best_u10_pseudo_v2_tv.yaml` | `train_pseudo_kfold` | 排程中 |
-| p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv | `..._tv.yaml` | `train_pseudo_kfold` | 排程中 |
-| p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv | `..._tv.yaml` | `train_pseudo_kfold` | 排程中 |
-| p2_combo_best_classw_focal_u6pro_tv | `..._tv.yaml` | `train_pseudo_kfold` | 排程中 |
-| p2_combo_best_aug_plus_tv | `exp_p2_combo_best_aug_plus_tv.yaml` | `train_pseudo_kfold` | 排程中 |
-| p2_combo_best_aug_plus_v2_tv | `exp_p2_combo_best_aug_plus_v2_tv.yaml` | `train_pseudo_kfold` | 排程中 |
+8 stems 全數在 2,000-row train+val 合併集（seed 42、5-fold）重訓完成，OOF = 各 fold best_epoch 加權分數的平均。批次執行器：`scripts/phase41_train_all_tv.py --resume`，總耗時約 5.4 小時。
+
+| Stem | 訓練腳本 | OOF (5-fold mean) | 狀態 |
+| :-- | :-- | :--: | :-- |
+| p2_combo_best_tv | `train_kfold` | 0.67857 | ✅ 完成 |
+| p2_combo_best_u10_pseudo_tv | `train_pseudo_kfold` | 0.68023 | ✅ 完成 |
+| **p2_combo_best_u10_pseudo_v2_tv** | `train_pseudo_kfold` | **0.68375** | ✅ 完成（最佳單 stem）|
+| p2_combo_best_u10_pseudo_v2_classw_focal_t4_g3_tv | `train_pseudo_kfold` | 0.67132 | ✅ 完成 |
+| p2_combo_best_u10_pseudo_v3_classw_focal_t4_g3_tv | `train_pseudo_kfold` | 0.66870 | ✅ 完成 |
+| p2_combo_best_classw_focal_u6pro_tv | `train_pseudo_kfold` | 0.66585 | ✅ 完成 |
+| p2_combo_best_aug_plus_tv | `train_pseudo_kfold` | 0.67371 | ✅ 完成 |
+| p2_combo_best_aug_plus_v2_tv | `train_pseudo_kfold` | 0.67368 | ✅ 完成 |
+
+**分析重點**：
+
+1. 單 stem OOF（0.665–0.684）與 Phase 2 時期的 1,000-row 同 stem OOF 同級，確認 2× 資料量未造成單模退化。
+2. `aug_plus_v2_tv` 的 T2（verification_timeline）macro-F1 = 0.5816，顯著高於其他 stem（~0.50）——2,000 筆 U10v2 偽標 + U6-pro 回譯增強對 T2 缺口任務有實質貢獻。
+3. TV stem 的 OOF 為 5-fold CV 於 2,000-row，**不可直接與 AP-D4 1,000-row OOF SOTA 0.71608 比較**；正確比較對象是 §14.5 的 TV 池 8-stem 集成 OOF。
+
+### 14.5 Phase 41.5 — TV 池 OOF 集成驗證（Phase 42 前置）
+
+測試集於 2026-06-11 仍未在本機（官方原定 6/10 釋出），Phase 42（測試集推論）暫時被阻塞。但已用 8 個 TV stem 的 2,000-row OOF 跑 post-constraint **joint hillclimb**（工具：`scripts/u16_tv_oof_ensemble.py`），取得最接近預期測試表現的代理分數，並作為 Phase 42 推論的 warm-start 權重。
+
+| 指標 | 分數 |
+| :-- | :--: |
+| 最佳單 stem（u10_pseudo_v2_tv，pooled OOF）| 0.68407 |
+| 等權 8-stem 混合 | 0.69759 |
+| **joint hillclimb 最佳（per-task stem 權重）** | **0.71033** |
+
+集成後 per-task：promise_status=0.9453、verification_timeline=0.6305、evidence_status=0.8713、evidence_quality=0.4724。等權混合相對最佳單 stem +0.01352，再經 per-task joint hillclimb +0.01274（合計 +0.02626），印證 8-stem 多樣性對 TV 池集成的價值（U10v2/aug_plus_v2 對 T2、u6pro 對 T2 權重 0.225）。
+
+> **方法學一致性**：此 OOF hillclimb 與 AP-D4 1,000-row OOF 0.71608 採同一搜索方法（per-task 權重 + post-constraint 評分），故兩數值可比。TV 池 OOF 略低於 AP-D4 屬預期（single-seed + 2,000-row CV 較嚴格）。
+> **過擬合警示**：32 維權重 × 上萬迭代於 OOF 上搜索，分數有樂觀偏差；最終仍以測試集表現為準，OOF 僅作 anchor 排序與 Phase 42 warm-start。
 
 ---
 
@@ -3673,7 +3696,28 @@ train+val 重訓後，使用 U12 val gap 腳本的推論機制對 **測試集** 
 | 後處理 | `apply_constraints_batch` | 集成 argmax 結果 |
 | 提交守門 | `src/tools/validate_submission.py --mode submission` | 最終 CSV |
 
-Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成，且測試集已於 2026-06-10 釋出。
+Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成（✅ 2026-06-11 達成），且測試集釋出（⏳ 官方原定 2026-06-10，截至 2026-06-11 本機尚未取得）。
+
+### 58.6 Phase 41 重訓成果與 TV 池 OOF 集成（2026-06-11）
+
+**8 stems 重訓 OOF（5-fold mean，seed 42）**：見 [§14.4](#144-phase-41-trainval-重訓狀態2026-06-05-啟動--2026-06-11-全部完成)。批次執行器 `scripts/phase41_train_all_tv.py --resume`，總耗時約 5.4 小時，8 stems 全數 `checkpoints_ok=True`。
+
+**TV 池 8-stem OOF 集成 joint hillclimb**（工具 `scripts/u16_tv_oof_ensemble.py`，重建 2,000-row pooled OOF → post-constraint per-task 權重搜索）：
+
+| 指標 | 分數 |
+| :-- | :--: |
+| 最佳單 stem（u10_pseudo_v2_tv，pooled OOF）| 0.68407 |
+| 等權 8-stem 混合 | 0.69759 |
+| **joint hillclimb 最佳** | **0.71033** |
+
+集成權重已存至 `reports/analysis/_ensemble/tv_oof_ensemble_meta.json`，作為 Phase 42 測試集推論的 warm-start。詳細分析與過擬合警示見 [§14.5](#145-phase-415--tv-池-oof-集成驗證phase-42-前置)。
+
+**Phase 42 推論流程（待測試集釋出）**：
+
+1. 用 8 個 `*_tv` checkpoints（每 stem 5 folds 平均）對測試集做 stored-view 推論。
+2. 套用 `tv_oof_ensemble_meta.json` 的 per-task stem 權重混合。
+3. `apply_constraints_batch` 後處理 → `validate_submission --mode submission` 守門。
+4. 並列 fallback：等權混合、最佳單 stem，供 anchor 分配。
 
 
 <a id="part-v--附錄-appendix"></a>
@@ -3741,19 +3785,21 @@ Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成，且測試集已於
 | U10 | TW 企業永續報告書專用偽標 pipeline | **完成（U10 stack SOTA = 0.67746，baseline +0.01012）** | §47 |
 | U11 | StratifiedGroupKFold by company sanity | 完成（診斷） | §40 |
 | U12 | OOF cross-fold variance | 完成（診斷；valid gap 待 6/03 釋出） | §41 |
+| U15 | train+val 合併資料產生（2,000 rows，`more_than_5_years` 自動正規化） | 完成 | §58.2, Phase 40 |
+| U16 | TV 池 8-stem OOF 集成 joint hillclimb（Phase 42 前置）| 完成 | §14.5, §58.6 |
+| **F9** | **Phase 41 Train+Val 8-stem 重訓（2,000-row、seed 42、5-fold）** | **完成（2026-06-11）：8 stems 全數重訓 + TV 池 OOF 集成驗證** | §14.4, §58 |
 
 ### 59.2 未完成或可重啟項目（TODO / Candidate）
 
-> 本節已依 Phase 40-41 狀態更新。
+> 本節已依 Phase 40-41 狀態更新。**F9 Phase 41 8-stem 重訓已於 2026-06-11 完成並移至 [§59.1.1](#5911-un-系列完成項目與成果)**。
 
 #### 59.2.1 等待 valid/test 的必要動作
 
 | ID | 項目 | 狀態 | 啟動條件 | 產出 |
 | :--: | :-- | :-- | :-- | :-- |
-| F1 | AP-D4 / AP-D3 / Phase36 valid 校準 | **工具完成；待首次執行** | AP-D4 TV checkpoints 訓練完成後執行 `scripts/u12_val_gap.py` | valid score、per-task drift、submission anchor 建議 |
+| F1 | AP-D4 / AP-D3 / Phase36 valid 校準 | **工具完成；TV checkpoints 已就緒；待 test 釋出後執行** | 執行 `scripts/u12_val_gap.py`（val 已可跑；test 待 6/10+ 釋出）| valid score、per-task drift、submission anchor 建議 |
 | F2 | 最終提交檔 schema 與 hierarchy 守門 | **本地 validator 已完成**；final 格式仍待 test 確認 | test 格式或官方範例確認 | `validate_submission` 檢查紀錄、最終 submission 欄位對齊 |
-| F3 | Submission anchor 分配策略 | **Phase 42 定案** | 2026-06-10 test 釋出後 | 21 次提交額度的主線與 fallback 順序 |
-| **F9** | **Phase 41 8-stem 重訓** | **進行中 (stem 1/8 訓練中)** | **`data/processed/train_val_combined.csv` 已就緒** | 8 個 TV checkpoints，提供 Phase 42 推論基礎 |
+| F3 | Submission anchor 分配策略 | **Phase 42 定案**；TV 池 OOF warm-start 權重已備（`tv_oof_ensemble_meta.json`）| 測試集釋出後 | 21 次提交額度的主線與 fallback 順序 |
 
 <a id="5922-下一輪可動執行路線v30-校訂-2026-05-10"></a>
 #### 59.2.2 可做但需前置條件的 Phase 40+ 候選
