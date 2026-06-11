@@ -3751,6 +3751,42 @@ Phase 42 啟動條件：Phase 41 全部 8 stem 重訓完成（✅ 2026-06-11 達
 > **約束一致性**：promise=No 的 276 列在三個下游欄位皆為 N/A（276 完全對齊），evidence_status≠Yes 的列其 quality 全 N/A（530 = 276 promise-No + 254 evidence-No），結構守門全數通過。
 > **HF 403 提示為非致命背景雜訊**：`hfl/chinese-macbert-base` discussions API 被停用所致，模型權重仍正常載入；可用 `HF_HUB_OFFLINE=1` 抑制。
 
+### 58.8 Phase 43 — 真實 leaderboard 0.5962 vs OOF 0.71033 根因分析（2026-06-11）
+
+主提交上傳後實際得分 **0.5961966**，較 OOF 代理 0.71033 暴跌 **0.114**。專案歷經約 40 個 Phase 的 OOF joint hillclimb，這是**第一個真實 leaderboard 分數**。完整診斷（工具 `scripts/u18_decoding_experiments.py`、`scripts/u19_decode_mismatch_oof.py`）：
+
+**逐項排查結論——非程式碼／對齊／解碼 bug**：
+
+| 嫌疑 | 檢驗方法 | 結論 |
+| :-- | :-- | :-- |
+| 邊際分布／對齊 bug | 預測 vs 訓練邊際分布逐類比對 | **排除**：預測分布幾乎完美吻合訓練（Yes 86% vs 81%、already 38% vs 36%、Clear 63% vs 56%）→ 模型對訓練分布校準良好 |
+| 解碼策略不一致（u16 純 argmax vs u17 強制非 N/A）| OOF 在兩種解碼下重新評分（u19）| **排除**：0.71033（純）vs 0.71044（強制）= **+0.00011**，可忽略 |
+| hillclimb 權重過擬合 | OOF：hillclimb vs equal-weight | **部分成立但有限**：hillclimb 0.71044 vs 等權 0.69612，僅 +0.0143，且為 OOF 過擬合，難以轉移 → 至多解釋 0.114 中的 ~0.014 |
+| 少數類崩塌 + domain shift | macro 任務 OOF 分數 + sample 5 列 | **主因**：即使分布內 OOF，T2=0.63、T4=0.47 已偏弱（T4 佔總分 35%）；測試集分布不同 + macro-F1 對少數類零召回極敏感 → 餘下 ~0.10 缺口 |
+
+**OOF 解碼 × 權重四象限**（`u19_decode_mismatch_oof.py`）：
+
+| 設定 | weighted | T1 | T2 | T3 | T4 |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| hillclimb + 純 argmax（u16 評分路徑）| 0.71033 | 0.945 | 0.631 | 0.871 | 0.472 |
+| hillclimb + 強制非 N/A（u17 提交路徑）| 0.71044 | 0.945 | 0.633 | 0.874 | 0.470 |
+| equal-weight + 純 argmax | 0.69759 | 0.941 | 0.605 | 0.861 | 0.458 |
+| equal-weight + 強制非 N/A | 0.69612 | 0.941 | 0.605 | 0.861 | 0.454 |
+
+**根因總結**：OOF 代理本身因 **domain shift（競賽 train 與 test 報告風格／公司不同）+ macro-F1 對少數類敏感** 而樂觀約 0.10；hillclimb 再疊加約 0.014 的 OOF 過擬合。沒有可修的程式 bug。
+
+**Phase 43 候選提交**（`outputs/submissions/`，皆已過 `validate_submission --mode preds`）：
+
+| 候選 | 策略 | 用意 | 風險 |
+| :-- | :-- | :-- | :-- |
+| `phase43_c1_equalweight_submission.csv` | 等權 8-stem 混合 | 移除 hillclimb 過擬合，最穩健 | 低 |
+| `phase43_c2_priorcorr_a03_submission.csv` | hillclimb + T2/T4 prior-correction α=0.3 | 對抗少數類崩塌 | 中（賭 test 較均衡）|
+| `phase43_c2_priorcorr_a05_submission.csv` | 同上 α=0.5 | 更強少數類推升 | 高（Misleading 衝到 4.7% vs train 0.1%，過度）|
+| `phase43_c3_equal_priorcorr_a03_submission.csv` | 等權 + T2/T4 prior-correction α=0.3 | C1+C2 結合，平衡 | 中 |
+| `phase43_c3_equal_priorcorr_a05_submission.csv` | 同上 α=0.5 | 更強 | 高 |
+
+> **prior-correction 不可用 OOF 調參**：OOF 與訓練集共用先驗分布，prior-correction 在 OOF 上必然看似變差；它只在 **test 先驗與 train 不同** 時才有益，本質是對 domain shift 的下注。建議下一次上傳順序：**C1（穩健去過擬合）→ C3 α=0.3（保守少數類修正）**，依 leaderboard 回饋再決定是否加大 α。
+
 
 <a id="part-v--附錄-appendix"></a>
 # Part V — 附錄 (Appendix)
