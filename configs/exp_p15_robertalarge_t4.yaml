@@ -7,6 +7,13 @@ exp_name: p15_robertalarge_t4
 # and is a genuine architecture+size step beyond the all-macbert-base pool.
 # Single seed=42 first to confirm VRAM/convergence; promote to 2024/20260417
 # only if T4 OOF >= 0.48 (admission gate).
+#
+# CRITICAL: train on the combined train+val (2000 rows) so the 5-fold OOF aligns
+# index-for-index with the existing _tv pool stems (required by the 9-way
+# per-task hillclimb reconstruction). Inheriting base.yaml's 1000-row CSV would
+# break OOF alignment.
+data:
+  csv_path: data/processed/train_val_combined.csv
 model:
   backbone: hfl/chinese-roberta-wwm-ext-large
   max_length: 512          # cut the 40% head-truncation; T4 evidence often in tail

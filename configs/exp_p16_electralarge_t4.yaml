@@ -3,8 +3,8 @@ exp_name: p16_electralarge_t4
 # Phase 48 second candidate (MASTER_PLAN §58.13). ELECTRA discriminator
 # pretraining tends to be strong on classification; cached offline. Same T4
 # focus + admission gate (T4 OOF >= 0.48) as p15. Run only if p15 passes or as
-# a parallel diversity source for the 9-way hillclimb.
-model:
+# a parallel diversity source for the 9-way hillclimb.data:
+  csv_path: data/processed/train_val_combined.csv   # combined 2000 for OOF alignmentmodel:
   backbone: hfl/chinese-electra-180g-large-discriminator
   max_length: 512
   pooling: cls_mean

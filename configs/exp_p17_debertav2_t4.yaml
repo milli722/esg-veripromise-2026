@@ -6,6 +6,8 @@ exp_name: p17_debertav2_t4
 # download: run `python scratch/p48_download_deberta.py` first (lifts offline
 # flag once, falls back to roberta-large if download fails). Same T4 focus +
 # admission gate (T4 OOF >= 0.48).
+data:
+  csv_path: data/processed/train_val_combined.csv   # combined 2000 for OOF alignment
 model:
   backbone: IDEA-CCNL/Erlangshen-DeBERTa-v2-320M-Chinese
   max_length: 512
